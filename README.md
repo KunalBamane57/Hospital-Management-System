@@ -1,36 +1,80 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🏥 MediCore - Hospital Management System
 
-## Getting Started
+A modern, full-stack Hospital Appointment Booking and Management System built with Next.js 15, TypeScript, Tailwind CSS, and MongoDB.
 
-First, run the development server:
+## ✨ Features
 
+- **🔐 Role-Based Authentication:** Secure login for both Patients and Doctors using NextAuth.js (Auth.js) and bcrypt password hashing.
+- **👨‍⚕️ Doctor Dashboard:** Doctors can manage their schedule, view upcoming appointments, write prescriptions, and review patient medical history.
+- **🤕 Patient Dashboard:** Patients can browse doctors by specialization, book appointments, view their upcoming/past visits, and manage their health profiles.
+- **⭐ Ratings & Reviews:** Patients can leave star ratings and reviews for doctors after completing an appointment.
+- **📊 Real-Time Database:** Fully integrated with MongoDB Atlas using Mongoose for strict schema validation.
+- **🎨 Premium UI/UX:** Built with shadcn/ui and Tailwind CSS featuring modern aesthetics, glassmorphism, and responsive design.
+
+## 🛠️ Tech Stack
+
+- **Framework:** [Next.js 15](https://nextjs.org/) (App Router)
+- **Language:** TypeScript
+- **Database:** MongoDB Atlas & Mongoose
+- **Authentication:** NextAuth.js (Auth.js v5)
+- **Styling:** Tailwind CSS & shadcn/ui
+- **State Management:** Zustand
+- **Form Validation:** Zod
+
+## 🚀 Getting Started
+
+### 1. Clone the repository and install dependencies
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Set up Environment Variables
+Create a `.env.local` file in the root directory and add the following:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```env
+# MongoDB Atlas Connection String
+MONGODB_URI="mongodb+srv://<username>:<password>@<cluster>.mongodb.net/hospital-db"
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+# NextAuth Secret (Generate a random string)
+NEXTAUTH_SECRET="your-super-secret-random-string"
 
-## Learn More
+# NextAuth URL
+NEXTAUTH_URL="http://localhost:3000"
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
+```
 
-To learn more about Next.js, take a look at the following resources:
+### 3. Seed the Database
+Before running the application, you need to populate the database with initial counters, doctors, and sample appointments. Run the seed script:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npx tsx src/scripts/seed.ts
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 4. Start the Development Server
+```bash
+npm run dev
+```
+Open [http://localhost:3000](http://localhost:3000) in your browser to see the result.
 
-## Deploy on Vercel
+## 🔑 Default Test Accounts
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+After running the seed script, you can use the following default credentials to log in and test the application:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Patient Account
+- **Email:** `john@example.com`
+- **Password:** `password123`
+
+### Doctor Account
+- **Email:** `sarah.chen@medicore.com`
+- **Password:** `password123`
+
+## 🧹 Useful Commands
+
+- **Delete a User:** If you need to manually delete a user and all of their related data (appointments, profiles, etc.) from the terminal, you can run:
+  ```bash
+  npx tsx src/scripts/delete-user.ts <USER_ID>
+  # Example: npx tsx src/scripts/delete-user.ts DOC-1001
+  ```
+
+## 📄 License
+This project is open-source and available under the MIT License.

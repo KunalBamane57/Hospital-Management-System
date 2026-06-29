@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { useAppStore } from "@/store/useAppStore";
 import { StatusBadge, PaymentBadge } from "@/components/shared/status-badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,19 +30,27 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import Link from "next/link";
 import { Appointment } from "@/types";
-import { timeSlots } from "@/data/mock-data";
+
+const timeSlots = [
+  "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
+  "14:00", "14:30", "15:00", "15:30", "16:00", "16:30",
+];
 
 export default function AppointmentsPage() {
-  const { currentUser, getAppointmentsByPatient, updateAppointmentStatus, rescheduleAppointment, getDoctorById } = useAppStore();
+  const { data: session } = useSession();
+  const { appointments, fetchAppointments, updateAppointmentStatus, rescheduleAppointment } = useAppStore();
   const [rescheduleDialog, setRescheduleDialog] = useState<Appointment | null>(null);
   const [cancelDialog, setCancelDialog] = useState<Appointment | null>(null);
   const [newDate, setNewDate] = useState<Date | undefined>();
   const [newTime, setNewTime] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  if (!currentUser) return null;
+  useEffect(() => {
+    if (session?.user?.userId) fetchAppointments();
+  }, [session?.user?.userId, fetchAppointments]);
 
-  const appointments = getAppointmentsByPatient(currentUser.id);
+  if (!session?.user) return null;
+
   const upcoming = appointments
     .filter((a) => a.status === "confirmed" || a.status === "pending")
     .sort((a, b) => a.date.localeCompare(b.date));
@@ -59,8 +68,7 @@ export default function AppointmentsPage() {
   const handleReschedule = async () => {
     if (!rescheduleDialog || !newDate || !newTime) return;
     setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    rescheduleAppointment(rescheduleDialog.id, format(newDate, "yyyy-MM-dd"), newTime);
+    await rescheduleAppointment(rescheduleDialog.id, format(newDate, "yyyy-MM-dd"), newTime);
     toast.success("Appointment Rescheduled", {
       description: `Moved to ${format(newDate, "MMM dd, yyyy")} at ${newTime}`,
     });
@@ -73,8 +81,7 @@ export default function AppointmentsPage() {
   const handleCancel = async () => {
     if (!cancelDialog) return;
     setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    updateAppointmentStatus(cancelDialog.id, "cancelled");
+    await updateAppointmentStatus(cancelDialog.id, "cancelled");
     toast.success("Appointment Cancelled", {
       description: "Your appointment has been cancelled and payment will be refunded.",
     });

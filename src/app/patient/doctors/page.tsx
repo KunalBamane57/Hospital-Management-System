@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useAppStore } from "@/store/useAppStore";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,7 +9,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { specializations } from "@/data/mock-data";
+
+const specializations = [
+  "All Specializations", "Cardiology", "Orthopedics", "Dermatology",
+  "Neurology", "Pediatrics", "General Medicine", "Ophthalmology",
+  "ENT", "Psychiatry", "Gynecology",
+];
 import {
   Search,
   Star,
@@ -25,10 +30,14 @@ import {
 } from "lucide-react";
 
 export default function DoctorsPage() {
-  const { doctors } = useAppStore();
+  const { doctors, fetchDoctors } = useAppStore();
   const [search, setSearch] = useState("");
   const [specialization, setSpecialization] = useState("All Specializations");
   const [sortBy, setSortBy] = useState("rating");
+
+  useEffect(() => {
+    fetchDoctors();
+  }, [fetchDoctors]);
 
   const filteredDoctors = useMemo(() => {
     let result = doctors.filter((doc) => {

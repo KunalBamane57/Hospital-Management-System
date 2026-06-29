@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { useAppStore } from "@/store/useAppStore";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,11 +9,17 @@ import { Badge } from "@/components/ui/badge";
 import { Bell, Calendar, FileText, CreditCard, Star, CheckCheck } from "lucide-react";
 
 export default function DoctorNotificationsPage() {
-  const { currentUser, getNotificationsByUser, markNotificationRead, markAllNotificationsRead } = useAppStore();
+  const { data: session } = useSession();
+  const { notifications, fetchNotifications, markNotificationRead, markAllNotificationsRead } = useAppStore();
 
-  if (!currentUser) return null;
+  useEffect(() => {
+    if (session?.user?.userId) {
+      fetchNotifications();
+    }
+  }, [session?.user?.userId, fetchNotifications]);
 
-  const notifications = getNotificationsByUser(currentUser.id);
+  if (!session?.user) return null;
+
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const getIcon = (type: string) => {
@@ -46,7 +54,7 @@ export default function DoctorNotificationsPage() {
           </p>
         </div>
         {unreadCount > 0 && (
-          <Button variant="outline" size="sm" onClick={() => markAllNotificationsRead(currentUser.id)} className="rounded-xl">
+          <Button variant="outline" size="sm" onClick={() => markAllNotificationsRead(session.user.userId)} className="rounded-xl">
             <CheckCheck className="mr-2 h-4 w-4" />
             Mark All Read
           </Button>

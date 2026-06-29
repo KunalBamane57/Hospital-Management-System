@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, use } from "react";
+import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { useAppStore } from "@/store/useAppStore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -40,8 +41,9 @@ export default function DoctorDetailPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
-  const { getDoctorById, currentUser, bookAppointment, getReviewsByDoctor, addNotification } = useAppStore();
-  const doctor = getDoctorById(id);
+  const { data: session } = useSession();
+  const { fetchDoctorById, bookAppointment, reviews, fetchReviews } = useAppStore();
+  const [doctor, setDoctor] = useState<Record<string, unknown> | null>(null);
 
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [selectedTime, setSelectedTime] = useState("");
@@ -50,10 +52,15 @@ export default function DoctorDetailPage({
   const [showPayment, setShowPayment] = useState(false);
   const [isBooking, setIsBooking] = useState(false);
 
-  if (!doctor || !currentUser) {
+  useEffect(() => {
+    fetchDoctorById(id).then((d: any) => setDoctor(d));
+    fetchReviews(id);
+  }, [id, fetchDoctorById, fetchReviews]);
+
+  if (!doctor || !session?.user) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
-        <p className="text-muted-foreground">Doctor not found</p>
+        <p className="text-muted-foreground">Loading doctor profile...</p>
         <Link href="/patient/doctors">
           <Button variant="link" className="mt-2 text-primary">
             Back to Doctors
@@ -63,59 +70,47 @@ export default function DoctorDetailPage({
     );
   }
 
-  const reviews = getReviewsByDoctor(doctor.id);
+  const doctorReviews = reviews.filter((r) => r.doctorId === id);
+  const availableSlots = (doctor.availableSlots as Array<{day: string; slots: string[]}>)|| [];
 
-  const getAvailableSlots = () => {
+  const getAvailableTimeslots = () => {
     if (!selectedDate) return [];
     const dayName = format(selectedDate, "EEEE");
-    const daySlots = doctor.availableSlots.find((s) => s.day === dayName);
+    const daySlots = availableSlots.find((s) => s.day === dayName);
     return daySlots?.slots || [];
   };
 
-  const availableSlots = getAvailableSlots();
+  const availableTimeslots = getAvailableTimeslots();
 
   const handleBookAppointment = async () => {
     if (!selectedDate || !selectedTime) return;
     setIsBooking(true);
-    await new Promise((resolve) => setTimeout(resolve, 1500));
 
-    bookAppointment({
-      patientId: currentUser.id,
-      doctorId: doctor.id,
-      patientName: currentUser.name,
-      doctorName: doctor.name,
-      doctorSpecialization: doctor.specialization,
+    const success = await bookAppointment({
+      patientId: session.user.userId,
+      doctorId: doctor.id as string,
+      patientName: session.user.name || "",
+      doctorName: doctor.name as string,
+      doctorSpecialization: doctor.specialization as string,
       date: format(selectedDate, "yyyy-MM-dd"),
       time: selectedTime,
       status: "pending",
       type: appointmentType,
       reason,
       paymentStatus: "completed",
-      paymentAmount: doctor.consultationFee,
-    });
-
-    addNotification({
-      userId: currentUser.id,
-      title: "Appointment Booked!",
-      message: `Your appointment with ${doctor.name} on ${format(selectedDate, "MMM dd, yyyy")} at ${selectedTime} has been booked.`,
-      type: "appointment",
-      read: false,
-    });
-
-    addNotification({
-      userId: doctor.id,
-      title: "New Appointment Request",
-      message: `${currentUser.name} has booked an appointment for ${format(selectedDate, "MMM dd, yyyy")} at ${selectedTime}.`,
-      type: "appointment",
-      read: false,
+      paymentAmount: doctor.consultationFee as number,
     });
 
     setIsBooking(false);
     setShowPayment(false);
-    toast.success("Appointment Booked!", {
-      description: `Your appointment with ${doctor.name} has been confirmed.`,
-    });
-    router.push("/patient/appointments");
+    if (success) {
+      toast.success("Appointment Booked!", {
+        description: `Your appointment with ${doctor.name} has been confirmed.`,
+      });
+      router.push("/patient/appointments");
+    } else {
+      toast.error("Booking failed", { description: "Please try again." });
+    }
   };
 
   return (
@@ -136,27 +131,27 @@ export default function DoctorDetailPage({
             <CardContent className="relative px-6 pb-6">
               <Avatar className="absolute -top-10 left-6 h-20 w-20 rounded-2xl border-4 border-card">
                 <AvatarFallback className="rounded-2xl gradient-primary text-white text-2xl font-bold">
-                  {doctor.name
+                  {(doctor.name as string)
                     .replace("Dr. ", "")
                     .split(" ")
-                    .map((n) => n[0])
+                    .map((n: string) => n[0])
                     .join("")}
                 </AvatarFallback>
               </Avatar>
               <div className="pt-12">
-                <h2 className="text-xl font-bold">{doctor.name}</h2>
-                <p className="text-primary font-medium text-sm">{doctor.specialization}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{doctor.qualification}</p>
+                <h2 className="text-xl font-bold">{doctor.name as string}</h2>
+                <p className="text-primary font-medium text-sm">{doctor.specialization as string}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{doctor.qualification as string}</p>
 
                 <div className="flex items-center gap-2 mt-3">
                   <div className="flex items-center gap-1 rounded-lg bg-amber-500/10 px-2.5 py-1">
                     <Star className="h-4 w-4 text-amber-500 fill-amber-500" />
                     <span className="text-sm font-bold text-amber-600 dark:text-amber-400">
-                      {doctor.rating}
+                      {doctor.rating as number}
                     </span>
                   </div>
                   <span className="text-xs text-muted-foreground">
-                    ({doctor.totalReviews} reviews)
+                    ({doctor.totalReviews as number} reviews)
                   </span>
                 </div>
 
@@ -165,23 +160,23 @@ export default function DoctorDetailPage({
                 <div className="space-y-3">
                   <div className="flex items-center gap-3 text-sm">
                     <Clock className="h-4 w-4 text-blue-500" />
-                    <span>{doctor.experience} years experience</span>
+                    <span>{doctor.experience as number} years experience</span>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
                     <MapPin className="h-4 w-4 text-red-500" />
-                    <span>{doctor.hospital}</span>
+                    <span>{doctor.hospital as string}</span>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
                     <GraduationCap className="h-4 w-4 text-purple-500" />
-                    <span>{doctor.department}</span>
+                    <span>{doctor.department as string}</span>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
                     <Globe className="h-4 w-4 text-emerald-500" />
-                    <span>{doctor.languages.join(", ")}</span>
+                    <span>{(doctor.languages as string[]).join(", ")}</span>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
                     <DollarSign className="h-4 w-4 text-amber-500" />
-                    <span className="font-semibold">${doctor.consultationFee}</span>
+                    <span className="font-semibold">${doctor.consultationFee as number}</span>
                     <span className="text-muted-foreground">per consultation</span>
                   </div>
                 </div>
@@ -189,13 +184,13 @@ export default function DoctorDetailPage({
                 <Separator className="my-4" />
 
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  {doctor.bio}
+                  {doctor.bio as string}
                 </p>
 
                 <div className="mt-4">
                   <p className="text-xs font-semibold text-muted-foreground mb-2">Available Days</p>
                   <div className="flex flex-wrap gap-1.5">
-                    {doctor.availableSlots.map((slot) => (
+                    {availableSlots.map((slot) => (
                       <Badge
                         key={slot.day}
                         variant="outline"
@@ -216,7 +211,7 @@ export default function DoctorDetailPage({
           <Tabs defaultValue="book" className="w-full">
             <TabsList className="grid w-full grid-cols-2 h-11 rounded-xl">
               <TabsTrigger value="book" className="rounded-lg">Book Appointment</TabsTrigger>
-              <TabsTrigger value="reviews" className="rounded-lg">Reviews ({reviews.length})</TabsTrigger>
+              <TabsTrigger value="reviews" className="rounded-lg">Reviews ({doctorReviews.length})</TabsTrigger>
             </TabsList>
 
             <TabsContent value="book" className="mt-4 space-y-4">
@@ -266,7 +261,7 @@ export default function DoctorDetailPage({
                       onSelect={setSelectedDate}
                       disabled={(date) => {
                         const dayName = format(date, "EEEE");
-                        const isAvailable = doctor.availableSlots.some(
+                        const isAvailable = availableSlots.some(
                           (s) => s.day === dayName
                         );
                         return date < new Date() || !isAvailable;
@@ -293,7 +288,7 @@ export default function DoctorDetailPage({
                           Select a date to see available time slots
                         </p>
                       </div>
-                    ) : availableSlots.length === 0 ? (
+                    ) : availableTimeslots.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-10 text-center">
                         <Clock className="h-10 w-10 text-muted-foreground/20 mb-3" />
                         <p className="text-sm text-muted-foreground">
@@ -302,7 +297,7 @@ export default function DoctorDetailPage({
                       </div>
                     ) : (
                       <div className="grid grid-cols-3 gap-2">
-                        {availableSlots.map((time) => (
+                        {availableTimeslots.map((time) => (
                           <Button
                             key={time}
                             variant={selectedTime === time ? "default" : "outline"}
@@ -342,7 +337,7 @@ export default function DoctorDetailPage({
               <div className="flex items-center justify-between rounded-xl border bg-card p-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Consultation Fee</p>
-                  <p className="text-2xl font-bold text-primary">${doctor.consultationFee}</p>
+                  <p className="text-2xl font-bold text-primary">${doctor.consultationFee as number}</p>
                 </div>
                 <Button
                   disabled={!selectedDate || !selectedTime || !reason}
@@ -358,14 +353,14 @@ export default function DoctorDetailPage({
             <TabsContent value="reviews" className="mt-4">
               <Card className="border-0 shadow-sm">
                 <CardContent className="pt-6">
-                  {reviews.length === 0 ? (
+                  {doctorReviews.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-12 text-center">
                       <Star className="h-12 w-12 text-muted-foreground/20 mb-3" />
                       <p className="text-muted-foreground">No reviews yet</p>
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {reviews.map((review) => (
+                      {doctorReviews.map((review) => (
                         <div
                           key={review.id}
                           className="rounded-xl border p-4"
@@ -425,7 +420,7 @@ export default function DoctorDetailPage({
             <div className="rounded-xl bg-muted/50 p-4 space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Doctor</span>
-                <span className="font-medium">{doctor.name}</span>
+                <span className="font-medium">{doctor.name as string}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Date</span>
@@ -445,7 +440,7 @@ export default function DoctorDetailPage({
               <div className="flex justify-between">
                 <span className="font-semibold">Total</span>
                 <span className="text-xl font-bold text-primary">
-                  ${doctor.consultationFee}
+                  ${doctor.consultationFee as number}
                 </span>
               </div>
             </div>

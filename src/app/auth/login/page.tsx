@@ -3,10 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useAppStore } from "@/store/useAppStore";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -24,7 +24,6 @@ type LoginForm = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAppStore();
   const [role, setRole] = useState<"patient" | "doctor">("patient");
   const [isLoading, setIsLoading] = useState(false);
 
@@ -34,24 +33,29 @@ export default function LoginPage() {
     formState: { errors },
   } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: role === "patient" ? "john@example.com" : "sarah.chen@medicore.com",
-      password: "password123",
-    },
   });
 
   const onSubmit = async (data: LoginForm) => {
     setIsLoading(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    const success = login(data.email, data.password, role);
-    if (success) {
-      toast.success("Welcome back!", {
-        description: `You've been logged in as a ${role}.`,
+    try {
+      const result = await signIn("credentials", {
+        email: data.email,
+        password: data.password,
+        role,
+        redirect: false,
       });
-      router.push(`/${role}/dashboard`);
-    } else {
-      toast.error("Login failed", { description: "Invalid credentials." });
+
+      if (result?.error) {
+        toast.error("Login failed", { description: result.error });
+      } else {
+        toast.success("Welcome back!", {
+          description: `You've been logged in as a ${role}.`,
+        });
+        router.push(`/${role}/dashboard`);
+        router.refresh();
+      }
+    } catch {
+      toast.error("Login failed", { description: "An unexpected error occurred." });
     }
     setIsLoading(false);
   };
@@ -108,8 +112,8 @@ export default function LoginPage() {
                   type="email"
                   placeholder={
                     role === "patient"
-                      ? "john@example.com"
-                      : "sarah.chen@medicore.com"
+                      ? "patient@example.com"
+                      : "doctor@medicore.com"
                   }
                   className="h-11 rounded-xl"
                   {...register("email")}
@@ -121,9 +125,6 @@ export default function LoginPage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="password">Password</Label>
-                  <a href="#" className="text-xs text-primary hover:underline">
-                    Forgot password?
-                  </a>
                 </div>
                 <Input
                   id="password"
@@ -135,20 +136,6 @@ export default function LoginPage() {
                 {errors.password && (
                   <p className="text-xs text-destructive">{errors.password.message}</p>
                 )}
-              </div>
-
-              {/* Demo credentials hint */}
-              <div className="rounded-xl bg-primary/5 border border-primary/10 p-3">
-                <p className="text-xs text-muted-foreground">
-                  <strong className="text-primary">Demo:</strong> Use any email to log in.
-                  Try{" "}
-                  <code className="rounded bg-primary/10 px-1 py-0.5 text-[10px] text-primary">
-                    {role === "patient"
-                      ? "john@example.com"
-                      : "sarah.chen@medicore.com"}
-                  </code>{" "}
-                  with any password.
-                </p>
               </div>
 
               <Button

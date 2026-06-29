@@ -3,19 +3,20 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useAppStore } from "@/store/useAppStore";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Activity, Loader2 } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Activity, Loader2, Stethoscope, User } from "lucide-react";
 import { toast } from "sonner";
 
-const registerSchema = z
+const patientSchema = z
   .object({
     name: z.string().min(2, "Name must be at least 2 characters"),
     email: z.string().email("Please enter a valid email"),
@@ -30,36 +31,122 @@ const registerSchema = z
     path: ["confirmPassword"],
   });
 
-type RegisterForm = z.infer<typeof registerSchema>;
+const doctorSchema = z
+  .object({
+    name: z.string().min(2, "Name must be at least 2 characters"),
+    email: z.string().email("Please enter a valid email"),
+    phone: z.string().min(10, "Please enter a valid phone number"),
+    password: z.string().min(6, "Password must be at least 6 characters"),
+    confirmPassword: z.string(),
+    specialization: z.string().min(1, "Specialization is required"),
+    experience: z.string().min(1, "Experience is required"),
+    qualification: z.string().min(1, "Qualification is required"),
+    consultationFee: z.string().min(1, "Consultation fee is required"),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords don't match",
+    path: ["confirmPassword"],
+  });
+
+type PatientForm = z.infer<typeof patientSchema>;
+type DoctorForm = z.infer<typeof doctorSchema>;
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { register: registerUser } = useAppStore();
+  const [role, setRole] = useState<"patient" | "doctor">("patient");
   const [isLoading, setIsLoading] = useState(false);
 
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    formState: { errors },
-  } = useForm<RegisterForm>({
-    resolver: zodResolver(registerSchema),
+  const patientForm = useForm<PatientForm>({
+    resolver: zodResolver(patientSchema),
   });
 
-  const onSubmit = async (data: RegisterForm) => {
+  const doctorForm = useForm<DoctorForm>({
+    resolver: zodResolver(doctorSchema),
+  });
+
+  const onSubmitPatient = async (data: PatientForm) => {
     setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    registerUser({
-      name: data.name,
-      email: data.email,
-      phone: data.phone,
-      gender: data.gender,
-      dateOfBirth: data.dateOfBirth,
-    });
-    toast.success("Account created!", {
-      description: "Welcome to MediCore. Your account has been set up.",
-    });
-    router.push("/patient/dashboard");
+    try {
+      const res = await fetch("/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          role: "patient",
+          name: data.name,
+          email: data.email,
+          password: data.password,
+          phone: data.phone,
+          gender: data.gender,
+          dateOfBirth: data.dateOfBirth,
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        toast.error("Registration failed", { description: result.error });
+        setIsLoading(false);
+        return;
+      }
+      toast.success("Account created!", {
+        description: `Your Patient ID is ${result.userId}. Logging you in...`,
+      });
+      // Auto sign-in after registration
+      const signInResult = await signIn("credentials", {
+        email: data.email,
+        password: data.password,
+        role: "patient",
+        redirect: false,
+      });
+      if (signInResult?.ok) {
+        router.push("/patient/dashboard");
+        router.refresh();
+      }
+    } catch {
+      toast.error("Registration failed", { description: "An unexpected error occurred." });
+    }
+    setIsLoading(false);
+  };
+
+  const onSubmitDoctor = async (data: DoctorForm) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch("/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          role: "doctor",
+          name: `Dr. ${data.name}`,
+          email: data.email,
+          password: data.password,
+          phone: data.phone,
+          specialization: data.specialization,
+          experience: parseInt(data.experience),
+          qualification: data.qualification,
+          consultationFee: parseInt(data.consultationFee),
+          department: data.specialization,
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        toast.error("Registration failed", { description: result.error });
+        setIsLoading(false);
+        return;
+      }
+      toast.success("Account created!", {
+        description: `Your Doctor ID is ${result.userId}. Logging you in...`,
+      });
+      const signInResult = await signIn("credentials", {
+        email: data.email,
+        password: data.password,
+        role: "doctor",
+        redirect: false,
+      });
+      if (signInResult?.ok) {
+        router.push("/doctor/dashboard");
+        router.refresh();
+      }
+    } catch {
+      toast.error("Registration failed", { description: "An unexpected error occurred." });
+    }
     setIsLoading(false);
   };
 
@@ -89,126 +176,152 @@ export default function RegisterPage() {
 
         <Card className="border-0 shadow-2xl">
           <CardContent className="pt-6">
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Full Name</Label>
-                <Input
-                  id="name"
-                  placeholder="John Anderson"
-                  className="h-11 rounded-xl"
-                  {...register("name")}
-                />
-                {errors.name && (
-                  <p className="text-xs text-destructive">{errors.name.message}</p>
-                )}
-              </div>
+            {/* Role Tabs */}
+            <Tabs
+              value={role}
+              onValueChange={(v) => setRole(v as "patient" | "doctor")}
+              className="mb-6"
+            >
+              <TabsList className="grid w-full grid-cols-2 h-12 rounded-xl">
+                <TabsTrigger value="patient" className="rounded-lg gap-2 text-sm">
+                  <User className="h-4 w-4" />
+                  Patient
+                </TabsTrigger>
+                <TabsTrigger value="doctor" className="rounded-lg gap-2 text-sm">
+                  <Stethoscope className="h-4 w-4" />
+                  Doctor
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
 
-              <div className="space-y-2">
-                <Label htmlFor="reg-email">Email</Label>
-                <Input
-                  id="reg-email"
-                  type="email"
-                  placeholder="john@example.com"
-                  className="h-11 rounded-xl"
-                  {...register("email")}
-                />
-                {errors.email && (
-                  <p className="text-xs text-destructive">{errors.email.message}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="phone">Phone Number</Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  placeholder="+1-555-0123"
-                  className="h-11 rounded-xl"
-                  {...register("phone")}
-                />
-                {errors.phone && (
-                  <p className="text-xs text-destructive">{errors.phone.message}</p>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
+            {/* Patient Form */}
+            {role === "patient" && (
+              <form onSubmit={patientForm.handleSubmit(onSubmitPatient)} className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Gender</Label>
-                  <Select onValueChange={(v) => setValue("gender", v as "male" | "female" | "other")}>
-                    <SelectTrigger className="h-11 rounded-xl">
-                      <SelectValue placeholder="Select" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="male">Male</SelectItem>
-                      <SelectItem value="female">Female</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {errors.gender && (
-                    <p className="text-xs text-destructive">{errors.gender.message}</p>
-                  )}
+                  <Label htmlFor="pat-name">Full Name</Label>
+                  <Input id="pat-name" placeholder="John Anderson" className="h-11 rounded-xl" {...patientForm.register("name")} />
+                  {patientForm.formState.errors.name && <p className="text-xs text-destructive">{patientForm.formState.errors.name.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="dob">Date of Birth</Label>
-                  <Input
-                    id="dob"
-                    type="date"
-                    className="h-11 rounded-xl"
-                    {...register("dateOfBirth")}
-                  />
-                  {errors.dateOfBirth && (
-                    <p className="text-xs text-destructive">{errors.dateOfBirth.message}</p>
-                  )}
+                  <Label htmlFor="pat-email">Email</Label>
+                  <Input id="pat-email" type="email" placeholder="john@example.com" className="h-11 rounded-xl" {...patientForm.register("email")} />
+                  {patientForm.formState.errors.email && <p className="text-xs text-destructive">{patientForm.formState.errors.email.message}</p>}
                 </div>
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="pat-phone">Phone Number</Label>
+                  <Input id="pat-phone" type="tel" placeholder="+1-555-0123" className="h-11 rounded-xl" {...patientForm.register("phone")} />
+                  {patientForm.formState.errors.phone && <p className="text-xs text-destructive">{patientForm.formState.errors.phone.message}</p>}
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Gender</Label>
+                    <Select onValueChange={(v) => patientForm.setValue("gender", v as "male" | "female" | "other")}>
+                      <SelectTrigger className="h-11 rounded-xl"><SelectValue placeholder="Select" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="male">Male</SelectItem>
+                        <SelectItem value="female">Female</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {patientForm.formState.errors.gender && <p className="text-xs text-destructive">{patientForm.formState.errors.gender.message}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="pat-dob">Date of Birth</Label>
+                    <Input id="pat-dob" type="date" className="h-11 rounded-xl" {...patientForm.register("dateOfBirth")} />
+                    {patientForm.formState.errors.dateOfBirth && <p className="text-xs text-destructive">{patientForm.formState.errors.dateOfBirth.message}</p>}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="pat-password">Password</Label>
+                  <Input id="pat-password" type="password" placeholder="••••••••" className="h-11 rounded-xl" {...patientForm.register("password")} />
+                  {patientForm.formState.errors.password && <p className="text-xs text-destructive">{patientForm.formState.errors.password.message}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="pat-confirm">Confirm Password</Label>
+                  <Input id="pat-confirm" type="password" placeholder="••••••••" className="h-11 rounded-xl" {...patientForm.register("confirmPassword")} />
+                  {patientForm.formState.errors.confirmPassword && <p className="text-xs text-destructive">{patientForm.formState.errors.confirmPassword.message}</p>}
+                </div>
+                <Button type="submit" disabled={isLoading} className="w-full h-11 rounded-xl gradient-primary text-white border-0 shadow-lg shadow-primary/25">
+                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create Patient Account"}
+                </Button>
+              </form>
+            )}
 
-              <div className="space-y-2">
-                <Label htmlFor="reg-password">Password</Label>
-                <Input
-                  id="reg-password"
-                  type="password"
-                  placeholder="••••••••"
-                  className="h-11 rounded-xl"
-                  {...register("password")}
-                />
-                {errors.password && (
-                  <p className="text-xs text-destructive">{errors.password.message}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirm Password</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  placeholder="••••••••"
-                  className="h-11 rounded-xl"
-                  {...register("confirmPassword")}
-                />
-                {errors.confirmPassword && (
-                  <p className="text-xs text-destructive">{errors.confirmPassword.message}</p>
-                )}
-              </div>
-
-              <Button
-                type="submit"
-                disabled={isLoading}
-                className="w-full h-11 rounded-xl gradient-primary text-white border-0 shadow-lg shadow-primary/25"
-              >
-                {isLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  "Create Account"
-                )}
-              </Button>
-            </form>
+            {/* Doctor Form */}
+            {role === "doctor" && (
+              <form onSubmit={doctorForm.handleSubmit(onSubmitDoctor)} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="doc-name">Full Name</Label>
+                  <Input id="doc-name" placeholder="Sarah Chen" className="h-11 rounded-xl" {...doctorForm.register("name")} />
+                  {doctorForm.formState.errors.name && <p className="text-xs text-destructive">{doctorForm.formState.errors.name.message}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="doc-email">Email</Label>
+                  <Input id="doc-email" type="email" placeholder="doctor@medicore.com" className="h-11 rounded-xl" {...doctorForm.register("email")} />
+                  {doctorForm.formState.errors.email && <p className="text-xs text-destructive">{doctorForm.formState.errors.email.message}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="doc-phone">Phone Number</Label>
+                  <Input id="doc-phone" type="tel" placeholder="+1-555-0101" className="h-11 rounded-xl" {...doctorForm.register("phone")} />
+                  {doctorForm.formState.errors.phone && <p className="text-xs text-destructive">{doctorForm.formState.errors.phone.message}</p>}
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Specialization</Label>
+                    <Select onValueChange={(v) => doctorForm.setValue("specialization", v as any)}>
+                      <SelectTrigger className="h-11 rounded-xl"><SelectValue placeholder="Select" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Cardiology">Cardiology</SelectItem>
+                        <SelectItem value="Orthopedics">Orthopedics</SelectItem>
+                        <SelectItem value="Dermatology">Dermatology</SelectItem>
+                        <SelectItem value="Neurology">Neurology</SelectItem>
+                        <SelectItem value="Pediatrics">Pediatrics</SelectItem>
+                        <SelectItem value="General Medicine">General Medicine</SelectItem>
+                        <SelectItem value="Ophthalmology">Ophthalmology</SelectItem>
+                        <SelectItem value="ENT">ENT</SelectItem>
+                        <SelectItem value="Psychiatry">Psychiatry</SelectItem>
+                        <SelectItem value="Gynecology">Gynecology</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {doctorForm.formState.errors.specialization && <p className="text-xs text-destructive">{doctorForm.formState.errors.specialization.message}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="doc-exp">Experience (years)</Label>
+                    <Input id="doc-exp" type="number" placeholder="10" className="h-11 rounded-xl" {...doctorForm.register("experience")} />
+                    {doctorForm.formState.errors.experience && <p className="text-xs text-destructive">{doctorForm.formState.errors.experience.message}</p>}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="doc-qual">Qualification</Label>
+                    <Input id="doc-qual" placeholder="MD, FACC" className="h-11 rounded-xl" {...doctorForm.register("qualification")} />
+                    {doctorForm.formState.errors.qualification && <p className="text-xs text-destructive">{doctorForm.formState.errors.qualification.message}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="doc-fee">Consultation Fee ($)</Label>
+                    <Input id="doc-fee" type="number" placeholder="200" className="h-11 rounded-xl" {...doctorForm.register("consultationFee")} />
+                    {doctorForm.formState.errors.consultationFee && <p className="text-xs text-destructive">{doctorForm.formState.errors.consultationFee.message}</p>}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="doc-password">Password</Label>
+                  <Input id="doc-password" type="password" placeholder="••••••••" className="h-11 rounded-xl" {...doctorForm.register("password")} />
+                  {doctorForm.formState.errors.password && <p className="text-xs text-destructive">{doctorForm.formState.errors.password.message}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="doc-confirm">Confirm Password</Label>
+                  <Input id="doc-confirm" type="password" placeholder="••••••••" className="h-11 rounded-xl" {...doctorForm.register("confirmPassword")} />
+                  {doctorForm.formState.errors.confirmPassword && <p className="text-xs text-destructive">{doctorForm.formState.errors.confirmPassword.message}</p>}
+                </div>
+                <Button type="submit" disabled={isLoading} className="w-full h-11 rounded-xl gradient-primary text-white border-0 shadow-lg shadow-primary/25">
+                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create Doctor Account"}
+                </Button>
+              </form>
+            )}
 
             <p className="mt-6 text-center text-sm text-muted-foreground">
               Already have an account?{" "}
-              <Link
-                href="/auth/login"
-                className="font-semibold text-primary hover:underline"
-              >
+              <Link href="/auth/login" className="font-semibold text-primary hover:underline">
                 Sign In
               </Link>
             </p>

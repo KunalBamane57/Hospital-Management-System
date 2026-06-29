@@ -1,5 +1,7 @@
 "use client";
 
+import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { useAppStore } from "@/store/useAppStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -9,20 +11,49 @@ import { Users, Phone, Mail, Calendar, Droplets, AlertTriangle, Heart } from "lu
 import { Patient } from "@/types";
 
 export default function DoctorPatientsPage() {
-  const { currentUser, getAppointmentsByDoctor, getPatientById, patients } = useAppStore();
+  const { data: session } = useSession();
+  const { appointments, fetchAppointments } = useAppStore();
+  const [patients, setPatients] = useState<Patient[]>([]);
 
-  if (!currentUser) return null;
+  useEffect(() => {
+    if (session?.user?.userId) {
+      fetchAppointments();
+      fetch("/api/patients")
+        .then(r => r.json())
+        .then(data => {
+          if (Array.isArray(data)) setPatients(data);
+        })
+        .catch(console.error);
+    }
+  }, [session?.user?.userId, fetchAppointments]);
 
-  const appointments = getAppointmentsByDoctor(currentUser.id);
-  const patientIds = [...new Set(appointments.map((a) => a.patientId))];
+  if (!session?.user) return null;
+
+  const doctorAppointments = appointments.filter((a) => a.doctorId === session.user.userId);
+  const patientIds = [...new Set(doctorAppointments.map((a) => a.patientId))];
   const doctorPatients = patientIds.map((id) => {
-    const patient = patients.find((p) => p.id === id);
-    const patientAppts = appointments.filter((a) => a.patientId === id);
+    const patientAppts = doctorAppointments.filter((a) => a.patientId === id);
     const lastVisit = patientAppts
       .filter((a) => a.status === "completed")
       .sort((a, b) => b.date.localeCompare(a.date))[0];
+    
+    const latestAppt = patientAppts[0];
+    const fullPatientInfo = patients.find(p => p.id === id);
+
+    const patient = {
+      id: id,
+      name: fullPatientInfo?.name || latestAppt.patientName || "Unknown Patient",
+      email: fullPatientInfo?.email || "N/A",
+      phone: fullPatientInfo?.phone || "N/A",
+      gender: fullPatientInfo?.gender || "N/A",
+      bloodGroup: fullPatientInfo?.bloodGroup || "N/A",
+      avatar: fullPatientInfo?.avatar || "",
+      dateOfBirth: fullPatientInfo?.dateOfBirth,
+      medicalHistory: fullPatientInfo?.medicalHistory || [],
+      allergies: fullPatientInfo?.allergies || []
+    };
     return { patient, appointments: patientAppts, lastVisit };
-  }).filter((p) => p.patient);
+  });
 
   return (
     <div className="space-y-6 animate-fade-in">

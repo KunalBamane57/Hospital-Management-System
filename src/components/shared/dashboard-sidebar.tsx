@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession, signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/useAppStore";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
@@ -29,7 +30,7 @@ import {
   UserCircle,
   Activity,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const patientNavItems = [
   { href: "/patient/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -53,12 +54,26 @@ const doctorNavItems = [
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
-  const { currentUser, logout, getNotificationsByUser } = useAppStore();
-  const isDoctor = currentUser?.role === "doctor";
+  const { data: session } = useSession();
+  const { notifications, fetchNotifications } = useAppStore();
+
+  const user = session?.user;
+  const isDoctor = user?.role === "doctor";
   const navItems = isDoctor ? doctorNavItems : patientNavItems;
-  const unreadNotifications = currentUser
-    ? getNotificationsByUser(currentUser.id).filter((n) => !n.read).length
+
+  useEffect(() => {
+    if (user?.userId) {
+      fetchNotifications();
+    }
+  }, [user?.userId, fetchNotifications]);
+
+  const unreadNotifications = user?.userId
+    ? notifications.filter((n) => n.userId === user.userId && !n.read).length
     : 0;
+
+  const handleLogout = async () => {
+    await signOut({ callbackUrl: "/auth/login" });
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -78,6 +93,15 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       </div>
 
       <Separator className="mx-4" />
+
+      {/* User ID Badge */}
+      {user?.userId && (
+        <div className="px-6 py-3">
+          <Badge variant="outline" className="text-xs font-mono">
+            ID: {user.userId}
+          </Badge>
+        </div>
+      )}
 
       {/* Navigation */}
       <ScrollArea className="flex-1 px-3 py-4">
@@ -108,7 +132,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         {/* Secondary nav */}
         <nav className="space-y-1">
           <Link
-            href={`/${currentUser?.role}/notifications`}
+            href={`/${user?.role}/notifications`}
             onClick={onNavigate}
             className={cn(
               "flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200",
@@ -126,7 +150,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             )}
           </Link>
           <Link
-            href={`/${currentUser?.role}/settings`}
+            href={`/${user?.role}/settings`}
             onClick={onNavigate}
             className={cn(
               "flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200",
@@ -146,28 +170,26 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         <div className="flex items-center gap-3 rounded-xl bg-secondary/50 p-3">
           <Avatar className="h-10 w-10 border-2 border-primary/20">
             <AvatarFallback className="gradient-primary text-sm font-bold text-white">
-              {currentUser?.name
-                .split(" ")
+              {user?.name
+                ?.split(" ")
                 .map((n) => n[0])
-                .join("")}
+                .join("") || "?"}
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold truncate">{currentUser?.name}</p>
-            <p className="text-xs text-muted-foreground truncate">{currentUser?.email}</p>
+            <p className="text-sm font-semibold truncate">{user?.name}</p>
+            <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
           </div>
           <div className="flex items-center gap-1">
             <ThemeToggle />
-            <Link href="/auth/login">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-9 w-9 rounded-full text-muted-foreground hover:text-destructive"
-                onClick={() => logout()}
-              >
-                <LogOut className="h-4 w-4" />
-              </Button>
-            </Link>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 rounded-full text-muted-foreground hover:text-destructive"
+              onClick={handleLogout}
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       </div>
@@ -202,4 +224,3 @@ export function DashboardSidebar() {
     </>
   );
 }
-

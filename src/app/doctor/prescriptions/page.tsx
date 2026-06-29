@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { useAppStore } from "@/store/useAppStore";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -9,11 +11,18 @@ import { FileText, Download, Calendar, Pill, Clock, AlertCircle, Stethoscope } f
 import { Prescription } from "@/types";
 
 export default function DoctorPrescriptionsPage() {
-  const { currentUser, getPrescriptionsByDoctor } = useAppStore();
+  const { data: session } = useSession();
+  const { prescriptions, fetchPrescriptions } = useAppStore();
 
-  if (!currentUser) return null;
+  useEffect(() => {
+    if (session?.user?.userId) {
+      fetchPrescriptions();
+    }
+  }, [session?.user?.userId, fetchPrescriptions]);
 
-  const prescriptions = getPrescriptionsByDoctor(currentUser.id);
+  if (!session?.user) return null;
+
+  const myPrescriptions = prescriptions.filter((p) => p.doctorId === session.user.userId);
 
   const handleDownload = (presc: Prescription) => {
     const text = `MEDICORE HOSPITAL - Digital Prescription\n\nPatient: ${presc.patientName}\nDoctor: ${presc.doctorName}\nDate: ${presc.date}\nDiagnosis: ${presc.diagnosis}\n\nMedications:\n${presc.medications.map((m, i) => `${i + 1}. ${m.name} - ${m.dosage} - ${m.frequency} (${m.duration})`).join("\n")}\n\nInstructions: ${presc.instructions}`;
@@ -35,7 +44,7 @@ export default function DoctorPrescriptionsPage() {
         <p className="text-muted-foreground mt-1">View and manage prescriptions you&apos;ve created</p>
       </div>
 
-      {prescriptions.length === 0 ? (
+      {myPrescriptions.length === 0 ? (
         <Card className="border-0 shadow-sm">
           <CardContent className="flex flex-col items-center justify-center py-20 text-center">
             <FileText className="h-16 w-16 text-muted-foreground/20 mb-4" />
@@ -47,7 +56,7 @@ export default function DoctorPrescriptionsPage() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {prescriptions.map((presc, i) => (
+          {myPrescriptions.map((presc, i) => (
             <Card key={presc.id} className="border-0 shadow-sm overflow-hidden animate-slide-up" style={{ animationDelay: `${i * 80}ms` }}>
               <div className="gradient-primary px-6 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-3">

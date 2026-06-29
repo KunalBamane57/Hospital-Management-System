@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { useAppStore } from "@/store/useAppStore";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -12,7 +13,8 @@ import { Star, Send, Loader2, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 
 export default function ReviewsPage() {
-  const { currentUser, getAppointmentsByPatient, reviews, addReview, getDoctorById } = useAppStore();
+  const { data: session } = useSession();
+  const { appointments, reviews, fetchAppointments, fetchReviews, addReview, getDoctorById, fetchDoctors, doctors } = useAppStore();
   const [showReviewDialog, setShowReviewDialog] = useState(false);
   const [selectedAptId, setSelectedAptId] = useState("");
   const [selectedDoctorId, setSelectedDoctorId] = useState("");
@@ -21,23 +23,31 @@ export default function ReviewsPage() {
   const [comment, setComment] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  if (!currentUser) return null;
+  const userId = session?.user?.userId;
 
-  const appointments = getAppointmentsByPatient(currentUser.id);
+  useEffect(() => {
+    if (userId) {
+      fetchAppointments();
+      fetchReviews();
+      fetchDoctors();
+    }
+  }, [userId, fetchAppointments, fetchReviews, fetchDoctors]);
+
+  if (!session?.user) return null;
+
   const completedAppts = appointments.filter((a) => a.status === "completed");
-  const reviewedAptIds = reviews.filter((r) => r.patientId === currentUser.id).map((r) => r.appointmentId);
+  const reviewedAptIds = reviews.filter((r) => r.patientId === userId).map((r) => r.appointmentId);
   const unreviewedAppts = completedAppts.filter((a) => !reviewedAptIds.includes(a.id));
-  const myReviews = reviews.filter((r) => r.patientId === currentUser.id);
+  const myReviews = reviews.filter((r) => r.patientId === userId);
 
   const handleSubmitReview = async () => {
     if (!rating || !comment.trim()) return;
     setIsSubmitting(true);
-    await new Promise((r) => setTimeout(r, 1000));
     const apt = appointments.find((a) => a.id === selectedAptId);
-    addReview({
-      patientId: currentUser.id,
+    await addReview({
+      patientId: session.user.userId,
       doctorId: selectedDoctorId,
-      patientName: currentUser.name,
+      patientName: session.user.name || "",
       appointmentId: selectedAptId,
       rating,
       comment,

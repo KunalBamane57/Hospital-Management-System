@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { useAppStore } from "@/store/useAppStore";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -15,25 +16,48 @@ import { toast } from "sonner";
 import { Patient } from "@/types";
 
 export default function ProfilePage() {
-  const { currentUser, updateProfile } = useAppStore();
+  const { data: session } = useSession();
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [formData, setFormData] = useState({
-    name: currentUser?.name || "",
-    email: currentUser?.email || "",
-    phone: currentUser?.phone || "",
-  });
+  const [profile, setProfile] = useState<Record<string, unknown> | null>(null);
+  const [formData, setFormData] = useState({ name: "", email: "", phone: "", address: "", bloodGroup: "" });
 
-  if (!currentUser) return null;
+  useEffect(() => {
+    if (session?.user?.userId) {
+      fetch("/api/user/me", { cache: "no-store" })
+        .then((r) => r.json())
+        .then((data) => {
+          setProfile(data);
+          setFormData({ 
+            name: data.name || "", 
+            email: data.email || "", 
+            phone: data.phone || "",
+            address: data.address || "",
+            bloodGroup: data.bloodGroup || ""
+          });
+        })
+        .catch(console.error);
+    }
+  }, [session?.user?.userId]);
 
-  const patient = currentUser as Patient;
+  if (!session?.user || !profile) return null;
+
+  const patient = profile as Record<string, unknown>;
 
   const handleSave = async () => {
     setIsSaving(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    updateProfile(currentUser.id, formData);
-    toast.success("Profile Updated", { description: "Your profile has been saved successfully." });
-    setIsEditing(false);
+    try {
+      await fetch("/api/user/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+      setProfile({ ...profile, ...formData });
+      toast.success("Profile Updated", { description: "Your profile has been saved successfully." });
+      setIsEditing(false);
+    } catch {
+      toast.error("Failed to update profile");
+    }
     setIsSaving(false);
   };
 
@@ -69,31 +93,31 @@ export default function ProfilePage() {
           <CardContent className="relative px-6 pb-6">
             <Avatar className="absolute -top-12 left-1/2 -translate-x-1/2 h-24 w-24 border-4 border-card rounded-2xl">
               <AvatarFallback className="rounded-2xl gradient-primary text-white text-3xl font-bold">
-                {currentUser.name.split(" ").map((n) => n[0]).join("")}
+                {(profile.name as string || "").split(" ").map((n: string) => n[0]).join("")}
               </AvatarFallback>
             </Avatar>
             <div className="pt-14 text-center">
-              <h2 className="text-xl font-bold">{currentUser.name}</h2>
+              <h2 className="text-xl font-bold">{profile.name as string}</h2>
               <p className="text-sm text-muted-foreground">Patient</p>
               <div className="mt-4 space-y-2">
                 <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
                   <Mail className="h-4 w-4" />
-                  {currentUser.email}
+                  {profile.email as string}
                 </div>
                 <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
                   <Phone className="h-4 w-4" />
-                  {currentUser.phone}
+                  {profile.phone as string}
                 </div>
               </div>
               <Separator className="my-4" />
               <div className="grid grid-cols-2 gap-3 text-center">
                 <div className="rounded-xl bg-muted/50 p-3">
                   <p className="text-xs text-muted-foreground">Blood Group</p>
-                  <p className="text-lg font-bold text-primary">{patient.bloodGroup}</p>
+                  <p className="text-lg font-bold text-primary">{patient.bloodGroup as string || "N/A"}</p>
                 </div>
                 <div className="rounded-xl bg-muted/50 p-3">
                   <p className="text-xs text-muted-foreground">Gender</p>
-                  <p className="text-lg font-bold capitalize">{patient.gender}</p>
+                  <p className="text-lg font-bold capitalize">{patient.gender as string || "N/A"}</p>
                 </div>
               </div>
             </div>
@@ -120,7 +144,7 @@ export default function ProfilePage() {
                       className="h-11 rounded-xl"
                     />
                   ) : (
-                    <p className="text-sm font-medium h-11 flex items-center px-3 rounded-xl bg-muted/50">{currentUser.name}</p>
+                    <p className="text-sm font-medium h-11 flex items-center px-3 rounded-xl bg-muted/50">{profile.name as string}</p>
                   )}
                 </div>
                 <div className="space-y-2">
@@ -132,7 +156,7 @@ export default function ProfilePage() {
                       className="h-11 rounded-xl"
                     />
                   ) : (
-                    <p className="text-sm font-medium h-11 flex items-center px-3 rounded-xl bg-muted/50">{currentUser.email}</p>
+                    <p className="text-sm font-medium h-11 flex items-center px-3 rounded-xl bg-muted/50">{profile.email as string}</p>
                   )}
                 </div>
                 <div className="space-y-2">
@@ -144,23 +168,31 @@ export default function ProfilePage() {
                       className="h-11 rounded-xl"
                     />
                   ) : (
-                    <p className="text-sm font-medium h-11 flex items-center px-3 rounded-xl bg-muted/50">{currentUser.phone}</p>
+                    <p className="text-sm font-medium h-11 flex items-center px-3 rounded-xl bg-muted/50">{profile.phone as string}</p>
                   )}
                 </div>
                 <div className="space-y-2">
                   <Label>Date of Birth</Label>
                   <p className="text-sm font-medium h-11 flex items-center gap-2 px-3 rounded-xl bg-muted/50">
                     <Calendar className="h-4 w-4 text-muted-foreground" />
-                    {patient.dateOfBirth ? new Date(patient.dateOfBirth).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "Not set"}
+                    {patient.dateOfBirth ? new Date(patient.dateOfBirth as string).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "Not set"}
                   </p>
                 </div>
               </div>
               <div className="space-y-2">
                 <Label>Address</Label>
-                <p className="text-sm font-medium flex items-center gap-2 px-3 py-2.5 rounded-xl bg-muted/50">
-                  <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
-                  {patient.address || "Not set"}
-                </p>
+                {isEditing ? (
+                  <Textarea
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    className="min-h-[80px] rounded-xl"
+                  />
+                ) : (
+                  <p className="text-sm font-medium flex items-center gap-2 px-3 py-2.5 rounded-xl bg-muted/50">
+                    <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
+                    {(patient.address as string) || "Not set"}
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -178,14 +210,23 @@ export default function ProfilePage() {
                   <Droplets className="h-4 w-4 text-red-500" />
                   Blood Group
                 </Label>
-                <Badge variant="outline" className="rounded-full text-sm px-3 py-1 border-red-500/20 text-red-500">
-                  {patient.bloodGroup}
-                </Badge>
+                {isEditing ? (
+                  <Input
+                    value={formData.bloodGroup}
+                    onChange={(e) => setFormData({ ...formData, bloodGroup: e.target.value })}
+                    placeholder="e.g. O+, A-, B+"
+                    className="h-11 rounded-xl"
+                  />
+                ) : (
+                  <Badge variant="outline" className="rounded-full text-sm px-3 py-1 border-red-500/20 text-red-500">
+                    {patient.bloodGroup as string || "N/A"}
+                  </Badge>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Medical History</Label>
                 <div className="flex flex-wrap gap-2">
-                  {patient.medicalHistory?.length > 0 ? patient.medicalHistory.map((item) => (
+                  {(patient.medicalHistory as string[])?.length > 0 ? (patient.medicalHistory as string[]).map((item: string) => (
                     <Badge key={item} variant="outline" className="rounded-full text-xs px-3 py-1">
                       {item}
                     </Badge>
@@ -198,21 +239,21 @@ export default function ProfilePage() {
                   Allergies
                 </Label>
                 <div className="flex flex-wrap gap-2">
-                  {patient.allergies?.length > 0 ? patient.allergies.map((allergy) => (
+                  {(patient.allergies as string[])?.length > 0 ? (patient.allergies as string[]).map((allergy: string) => (
                     <Badge key={allergy} className="rounded-full text-xs px-3 py-1 bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20" variant="outline">
                       {allergy}
                     </Badge>
                   )) : <p className="text-sm text-muted-foreground">None recorded</p>}
                 </div>
               </div>
-              {patient.insuranceId && (
+              {(patient.insuranceId as string) && (
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2">
                     <Shield className="h-4 w-4 text-blue-500" />
                     Insurance ID
                   </Label>
                   <Badge variant="outline" className="rounded-full text-sm px-3 py-1 border-blue-500/20 text-blue-500">
-                    {patient.insuranceId}
+                    {patient.insuranceId as string}
                   </Badge>
                 </div>
               )}

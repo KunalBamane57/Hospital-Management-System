@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { useAppStore } from "@/store/useAppStore";
 import { StatusBadge, PaymentBadge } from "@/components/shared/status-badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -35,17 +36,21 @@ import {
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { Appointment, Medication } from "@/types";
-import { timeSlots } from "@/data/mock-data";
+
+const timeSlots = [
+  "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
+  "14:00", "14:30", "15:00", "15:30", "16:00", "16:30",
+];
 
 export default function DoctorAppointmentsPage() {
+  const { data: session } = useSession();
   const {
-    currentUser,
-    getAppointmentsByDoctor,
+    appointments,
+    fetchAppointments,
     updateAppointmentStatus,
     rescheduleAppointment,
     addDiagnosis,
     addPrescription,
-    getPatientById,
   } = useAppStore();
 
   const [diagnosisDialog, setDiagnosisDialog] = useState<Appointment | null>(null);
@@ -63,16 +68,19 @@ export default function DoctorAppointmentsPage() {
   const [newTime, setNewTime] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  if (!currentUser) return null;
+  useEffect(() => {
+    if (session?.user?.userId) fetchAppointments();
+  }, [session?.user?.userId, fetchAppointments]);
 
-  const appointments = getAppointmentsByDoctor(currentUser.id);
+  if (!session?.user) return null;
+
   const pending = appointments.filter((a) => a.status === "pending").sort((a, b) => a.date.localeCompare(b.date));
   const confirmed = appointments.filter((a) => a.status === "confirmed").sort((a, b) => a.date.localeCompare(b.date));
   const completed = appointments.filter((a) => a.status === "completed");
   const others = appointments.filter((a) => a.status === "cancelled" || a.status === "rescheduled");
 
   const handleApprove = async (aptId: string) => {
-    updateAppointmentStatus(aptId, "confirmed");
+    await updateAppointmentStatus(aptId, "confirmed");
     toast.success("Appointment approved!");
   };
 
@@ -83,9 +91,8 @@ export default function DoctorAppointmentsPage() {
   const handleSaveDiagnosis = async () => {
     if (!diagnosisDialog) return;
     setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
-    addDiagnosis(diagnosisDialog.id, diagnosis, notes);
-    updateAppointmentStatus(diagnosisDialog.id, "completed");
+    await addDiagnosis(diagnosisDialog.id, diagnosis, notes);
+    await updateAppointmentStatus(diagnosisDialog.id, "completed");
     toast.success("Appointment completed with diagnosis notes!");
     setDiagnosisDialog(null);
     setDiagnosis("");
@@ -96,14 +103,13 @@ export default function DoctorAppointmentsPage() {
   const handleSavePrescription = async () => {
     if (!prescriptionDialog) return;
     setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 1000));
     const validMeds = medications.filter((m) => m.name && m.dosage);
-    addPrescription({
+    await addPrescription({
       appointmentId: prescriptionDialog.id,
       patientId: prescriptionDialog.patientId,
-      doctorId: currentUser.id,
+      doctorId: session.user.userId,
       patientName: prescriptionDialog.patientName,
-      doctorName: currentUser.name,
+      doctorName: session.user.name || "",
       date: new Date().toISOString().split("T")[0],
       diagnosis: prescDiagnosis,
       medications: validMeds,
@@ -122,8 +128,7 @@ export default function DoctorAppointmentsPage() {
   const handleReschedule = async () => {
     if (!rescheduleDialog || !newDate || !newTime) return;
     setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
-    rescheduleAppointment(rescheduleDialog.id, format(newDate, "yyyy-MM-dd"), newTime);
+    await rescheduleAppointment(rescheduleDialog.id, format(newDate, "yyyy-MM-dd"), newTime);
     toast.success("Appointment rescheduled!");
     setRescheduleDialog(null);
     setNewDate(undefined);
@@ -131,8 +136,8 @@ export default function DoctorAppointmentsPage() {
     setIsLoading(false);
   };
 
-  const handleCancel = (aptId: string) => {
-    updateAppointmentStatus(aptId, "cancelled");
+  const handleCancel = async (aptId: string) => {
+    await updateAppointmentStatus(aptId, "cancelled");
     toast.success("Appointment cancelled.");
   };
 

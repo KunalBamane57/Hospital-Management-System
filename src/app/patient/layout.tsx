@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useAppStore } from "@/store/useAppStore";
+import { useEffect } from "react";
 import { DashboardSidebar } from "@/components/shared/dashboard-sidebar";
 
 export default function PatientLayout({
@@ -11,15 +11,25 @@ export default function PatientLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const { isAuthenticated, currentUser } = useAppStore();
+  const { data: session, status } = useSession();
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (status === "unauthenticated") {
       router.push("/auth/login");
+    } else if (status === "authenticated" && session?.user?.role !== "patient") {
+      router.push(`/${session?.user?.role}/dashboard`);
     }
-  }, [isAuthenticated, router]);
+  }, [status, session, router]);
 
-  if (!isAuthenticated) return null;
+  if (status === "loading") {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (status !== "authenticated" || session?.user?.role !== "patient") return null;
 
   return (
     <div className="flex h-screen overflow-hidden">

@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { useAppStore } from "@/store/useAppStore";
 import { StatCard } from "@/components/shared/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,16 +11,24 @@ import { Star, MessageSquare, TrendingUp, Users } from "lucide-react";
 import { Doctor } from "@/types";
 
 export default function DoctorReviewsPage() {
-  const { currentUser, getReviewsByDoctor } = useAppStore();
+  const { data: session } = useSession();
+  const { reviews, fetchReviews, fetchDoctorById } = useAppStore();
+  const [doctor, setDoctor] = useState<any>(null);
 
-  if (!currentUser) return null;
-  const doctor = currentUser as Doctor;
-  const reviews = getReviewsByDoctor(currentUser.id);
+  useEffect(() => {
+    if (session?.user?.userId) {
+      fetchReviews();
+      fetchDoctorById(session.user.userId).then((d: any) => setDoctor(d));
+    }
+  }, [session?.user?.userId, fetchReviews, fetchDoctorById]);
+
+  if (!session?.user || !doctor) return null;
+  const myReviews = reviews.filter((r) => r.doctorId === session.user.userId);
 
   const ratingDist = [5, 4, 3, 2, 1].map((r) => ({
     rating: r,
-    count: reviews.filter((rev) => rev.rating === r).length,
-    percentage: reviews.length > 0 ? (reviews.filter((rev) => rev.rating === r).length / reviews.length) * 100 : 0,
+    count: myReviews.filter((rev) => rev.rating === r).length,
+    percentage: myReviews.length > 0 ? (myReviews.filter((rev) => rev.rating === r).length / myReviews.length) * 100 : 0,
   }));
 
   return (
@@ -34,20 +44,20 @@ export default function DoctorReviewsPage() {
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard
           title="Overall Rating"
-          value={doctor.rating}
+          value={doctor.rating as number}
           icon={Star}
           iconClassName="bg-amber-500/10 text-amber-500"
-          description={`Based on ${doctor.totalReviews} reviews`}
+          description={`Based on ${doctor.totalReviews as number} reviews`}
         />
         <StatCard
           title="Total Reviews"
-          value={reviews.length}
+          value={myReviews.length}
           icon={MessageSquare}
           iconClassName="bg-blue-500/10 text-blue-500"
         />
         <StatCard
           title="5-Star Reviews"
-          value={reviews.filter((r) => r.rating === 5).length}
+          value={myReviews.filter((r) => r.rating === 5).length}
           icon={TrendingUp}
           iconClassName="bg-emerald-500/10 text-emerald-500"
         />
@@ -79,7 +89,7 @@ export default function DoctorReviewsPage() {
             <CardTitle className="text-base">Patient Reviews</CardTitle>
           </CardHeader>
           <CardContent>
-            {reviews.length === 0 ? (
+            {myReviews.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <Star className="h-14 w-14 text-muted-foreground/20 mb-4" />
                 <h3 className="text-lg font-semibold">No Reviews Yet</h3>
@@ -87,7 +97,7 @@ export default function DoctorReviewsPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {reviews.map((review, i) => (
+                {myReviews.map((review, i) => (
                   <div key={review.id} className="rounded-xl border p-4 animate-slide-up" style={{ animationDelay: `${i * 80}ms` }}>
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">

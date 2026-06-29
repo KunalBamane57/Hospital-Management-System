@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { useAppStore } from "@/store/useAppStore";
 import { PaymentBadge, StatusBadge } from "@/components/shared/status-badge";
 import { StatCard } from "@/components/shared/stat-card";
@@ -9,11 +11,14 @@ import { Badge } from "@/components/ui/badge";
 import { CreditCard, DollarSign, TrendingUp, ArrowDownRight, Receipt } from "lucide-react";
 
 export default function PaymentsPage() {
-  const { currentUser, getAppointmentsByPatient } = useAppStore();
+  const { data: session } = useSession();
+  const { appointments, fetchAppointments } = useAppStore();
 
-  if (!currentUser) return null;
+  useEffect(() => {
+    if (session?.user?.userId) fetchAppointments();
+  }, [session?.user?.userId, fetchAppointments]);
 
-  const appointments = getAppointmentsByPatient(currentUser.id);
+  if (!session?.user) return null;
   const paidTotal = appointments
     .filter((a) => a.paymentStatus === "completed")
     .reduce((sum, a) => sum + a.paymentAmount, 0);

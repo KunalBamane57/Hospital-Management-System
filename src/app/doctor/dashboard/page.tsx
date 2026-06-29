@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { useAppStore } from "@/store/useAppStore";
 import { StatCard } from "@/components/shared/stat-card";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -38,40 +40,41 @@ import {
   Pie,
   Cell,
 } from "recharts";
-import { Doctor } from "@/types";
-
-const weeklyData = [
-  { day: "Mon", patients: 8 },
-  { day: "Tue", patients: 6 },
-  { day: "Wed", patients: 10 },
-  { day: "Thu", patients: 7 },
-  { day: "Fri", patients: 5 },
-  { day: "Sat", patients: 3 },
-  { day: "Sun", patients: 0 },
-];
-
-const revenueData = [
-  { month: "Jan", revenue: 4200 },
-  { month: "Feb", revenue: 3800 },
-  { month: "Mar", revenue: 5100 },
-  { month: "Apr", revenue: 4600 },
-  { month: "May", revenue: 5500 },
-  { month: "Jun", revenue: 6200 },
-];
 
 const COLORS = ["#4f8ef7", "#34d399", "#f59e0b", "#ef4444"];
 
 export default function DoctorDashboard() {
-  const { currentUser, getAppointmentsByDoctor, getUpcomingAppointments, getNotificationsByUser, getPrescriptionsByDoctor } =
-    useAppStore();
+  const { data: session } = useSession();
+  const {
+    appointments,
+    notifications,
+    fetchAppointments,
+    fetchNotifications,
+  } = useAppStore();
 
-  if (!currentUser) return null;
+  const [doctorProfile, setDoctorProfile] = useState<Record<string, unknown> | null>(null);
+  const userId = session?.user?.userId;
 
-  const doctor = currentUser as Doctor;
-  const allAppointments = getAppointmentsByDoctor(currentUser.id);
-  const upcomingAppointments = getUpcomingAppointments(currentUser.id, "doctor");
+  useEffect(() => {
+    if (userId) {
+      fetchAppointments();
+      fetchNotifications();
+      // Fetch full doctor profile
+      fetch("/api/user/me")
+        .then((r) => r.json())
+        .then((data) => setDoctorProfile(data))
+        .catch(console.error);
+    }
+  }, [userId, fetchAppointments, fetchNotifications]);
+
+  if (!session?.user) return null;
+
+  const allAppointments = appointments;
+  const today = new Date().toISOString().split("T")[0];
+  const upcomingAppointments = allAppointments
+    .filter((a) => a.date >= today && (a.status === "confirmed" || a.status === "pending"))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
   const completedAppointments = allAppointments.filter((a) => a.status === "completed");
-  const notifications = getNotificationsByUser(currentUser.id);
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const totalRevenue = allAppointments
@@ -79,6 +82,33 @@ export default function DoctorDashboard() {
     .reduce((sum, a) => sum + a.paymentAmount, 0);
 
   const uniquePatients = new Set(allAppointments.map((a) => a.patientId)).size;
+
+  const rating = (doctorProfile?.rating as number) || 0;
+  const totalReviews = (doctorProfile?.totalReviews as number) || 0;
+
+  // Generate weekly data from actual appointments
+  const weeklyData = Array.from({ length: 7 }, (_, i) => {
+    const date = new Date();
+    date.setDate(date.getDate() - date.getDay() + i + 1);
+    const dayStr = date.toISOString().split("T")[0];
+    const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    return {
+      day: days[i],
+      patients: allAppointments.filter((a) => a.date === dayStr).length,
+    };
+  });
+
+  // Generate revenue data from actual appointments
+  const revenueData = Array.from({ length: 6 }, (_, i) => {
+    const date = new Date();
+    date.setMonth(date.getMonth() - (5 - i));
+    const month = date.toLocaleString("en-US", { month: "short" });
+    const monthStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    const revenue = allAppointments
+      .filter((a) => a.date.startsWith(monthStr) && a.paymentStatus === "completed")
+      .reduce((sum, a) => sum + a.paymentAmount, 0);
+    return { month, revenue };
+  });
 
   const statusData = [
     { name: "Confirmed", value: allAppointments.filter((a) => a.status === "confirmed").length },
@@ -101,7 +131,7 @@ export default function DoctorDashboard() {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-            Welcome, <span className="text-gradient">{doctor.name}</span> 👋
+            Welcome, <span className="text-gradient">{session.user.name}</span> 👋
           </h1>
           <p className="text-muted-foreground mt-1">
             Here&apos;s your practice overview for today
@@ -110,8 +140,8 @@ export default function DoctorDashboard() {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1 rounded-lg bg-amber-500/10 px-3 py-1.5">
             <Star className="h-4 w-4 text-amber-500 fill-amber-500" />
-            <span className="text-sm font-bold text-amber-600 dark:text-amber-400">{doctor.rating}</span>
-            <span className="text-xs text-muted-foreground">({doctor.totalReviews})</span>
+            <span className="text-sm font-bold text-amber-600 dark:text-amber-400">{rating}</span>
+            <span className="text-xs text-muted-foreground">({totalReviews})</span>
           </div>
         </div>
       </div>
@@ -307,29 +337,36 @@ export default function DoctorDashboard() {
             </Link>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
-              {notifications.slice(0, 4).map((notif) => (
-                <div
-                  key={notif.id}
-                  className={`flex items-start gap-3 rounded-xl p-3 transition-colors ${
-                    !notif.read ? "bg-primary/5" : "hover:bg-muted/50"
-                  }`}
-                >
-                  <div className={`mt-0.5 flex h-8 w-8 items-center justify-center rounded-lg ${
-                    notif.type === "appointment" ? "bg-blue-500/10 text-blue-500"
-                    : notif.type === "review" ? "bg-amber-500/10 text-amber-500"
-                    : "bg-muted text-muted-foreground"
-                  }`}>
-                    {notif.type === "appointment" ? <Calendar className="h-4 w-4" /> : <Star className="h-4 w-4" />}
+            {notifications.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <Bell className="h-10 w-10 text-muted-foreground/30 mb-3" />
+                <p className="text-sm text-muted-foreground">No notifications yet</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {notifications.slice(0, 4).map((notif) => (
+                  <div
+                    key={notif.id}
+                    className={`flex items-start gap-3 rounded-xl p-3 transition-colors ${
+                      !notif.read ? "bg-primary/5" : "hover:bg-muted/50"
+                    }`}
+                  >
+                    <div className={`mt-0.5 flex h-8 w-8 items-center justify-center rounded-lg ${
+                      notif.type === "appointment" ? "bg-blue-500/10 text-blue-500"
+                      : notif.type === "review" ? "bg-amber-500/10 text-amber-500"
+                      : "bg-muted text-muted-foreground"
+                    }`}>
+                      {notif.type === "appointment" ? <Calendar className="h-4 w-4" /> : <Star className="h-4 w-4" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">{notif.title}</p>
+                      <p className="text-xs text-muted-foreground line-clamp-1">{notif.message}</p>
+                    </div>
+                    {!notif.read && <span className="h-2 w-2 rounded-full bg-primary mt-2 shrink-0" />}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">{notif.title}</p>
-                    <p className="text-xs text-muted-foreground line-clamp-1">{notif.message}</p>
-                  </div>
-                  {!notif.read && <span className="h-2 w-2 rounded-full bg-primary mt-2 shrink-0" />}
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

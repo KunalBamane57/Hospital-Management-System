@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { useAppStore } from "@/store/useAppStore";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,15 +20,24 @@ const ALL_SLOTS = [
 ];
 
 export default function AvailabilityPage() {
-  const { currentUser } = useAppStore();
+  const { data: session } = useSession();
+  const { fetchDoctorById } = useAppStore();
   const [isSaving, setIsSaving] = useState(false);
+  const [doctor, setDoctor] = useState<Record<string, unknown> | null>(null);
+  const [availability, setAvailability] = useState<AvailableSlot[]>([]);
 
-  if (!currentUser) return null;
-  const doctor = currentUser as Doctor;
+  useEffect(() => {
+    if (session?.user?.userId) {
+      fetchDoctorById(session.user.userId).then((d: any) => {
+        if (d) {
+          setDoctor(d);
+          setAvailability((d.availableSlots as AvailableSlot[]) || []);
+        }
+      });
+    }
+  }, [session?.user?.userId, fetchDoctorById]);
 
-  const [availability, setAvailability] = useState<AvailableSlot[]>(
-    doctor.availableSlots || []
-  );
+  if (!session?.user || !doctor) return null;
 
   const isDayEnabled = (day: string) => availability.some((s) => s.day === day);
 
@@ -58,8 +68,16 @@ export default function AvailabilityPage() {
 
   const handleSave = async () => {
     setIsSaving(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    toast.success("Availability Updated!", { description: "Your consultation schedule has been saved." });
+    try {
+      await fetch("/api/user/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ availableSlots: availability }),
+      });
+      toast.success("Availability Updated!", { description: "Your consultation schedule has been saved." });
+    } catch {
+      toast.error("Failed to update availability");
+    }
     setIsSaving(false);
   };
 

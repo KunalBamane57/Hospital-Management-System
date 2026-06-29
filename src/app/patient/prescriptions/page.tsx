@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { useAppStore } from "@/store/useAppStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -19,11 +21,14 @@ import {
 import { Prescription } from "@/types";
 
 export default function PrescriptionsPage() {
-  const { currentUser, getPrescriptionsByPatient } = useAppStore();
+  const { data: session } = useSession();
+  const { prescriptions, fetchPrescriptions } = useAppStore();
 
-  if (!currentUser) return null;
+  useEffect(() => {
+    if (session?.user?.userId) fetchPrescriptions();
+  }, [session?.user?.userId, fetchPrescriptions]);
 
-  const prescriptions = getPrescriptionsByPatient(currentUser.id);
+  if (!session?.user) return null;
 
   const handleDownload = (presc: Prescription) => {
     const text = `

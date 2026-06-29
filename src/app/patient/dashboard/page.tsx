@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { useAppStore } from "@/store/useAppStore";
 import { StatCard } from "@/components/shared/stat-card";
 import { StatusBadge, PaymentBadge } from "@/components/shared/status-badge";
@@ -25,6 +27,7 @@ import {
   Phone,
   MapPin,
   TrendingUp,
+  Loader2,
 } from "lucide-react";
 import {
   AreaChart,
@@ -39,33 +42,53 @@ import {
   Cell,
 } from "recharts";
 
-const monthlyData = [
-  { month: "Jan", appointments: 2 },
-  { month: "Feb", appointments: 1 },
-  { month: "Mar", appointments: 3 },
-  { month: "Apr", appointments: 1 },
-  { month: "May", appointments: 2 },
-  { month: "Jun", appointments: 3 },
-];
-
 const COLORS = ["#4f8ef7", "#34d399", "#f59e0b", "#ef4444"];
 
 export default function PatientDashboard() {
-  const { currentUser, getAppointmentsByPatient, getUpcomingAppointments, getNotificationsByUser, getPrescriptionsByPatient } =
-    useAppStore();
+  const { data: session } = useSession();
+  const {
+    appointments,
+    prescriptions,
+    notifications,
+    fetchAppointments,
+    fetchPrescriptions,
+    fetchNotifications,
+  } = useAppStore();
 
-  if (!currentUser) return null;
+  const userId = session?.user?.userId;
 
-  const allAppointments = getAppointmentsByPatient(currentUser.id);
-  const upcomingAppointments = getUpcomingAppointments(currentUser.id, "patient");
+  useEffect(() => {
+    if (userId) {
+      fetchAppointments();
+      fetchPrescriptions();
+      fetchNotifications();
+    }
+  }, [userId, fetchAppointments, fetchPrescriptions, fetchNotifications]);
+
+  if (!session?.user) return null;
+
+  const allAppointments = appointments;
+  const today = new Date().toISOString().split("T")[0];
+  const upcomingAppointments = allAppointments
+    .filter((a) => a.date >= today && (a.status === "confirmed" || a.status === "pending"))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
   const completedAppointments = allAppointments.filter((a) => a.status === "completed");
   const cancelledAppointments = allAppointments.filter((a) => a.status === "cancelled");
-  const notifications = getNotificationsByUser(currentUser.id);
   const unreadCount = notifications.filter((n) => !n.read).length;
-  const prescriptions = getPrescriptionsByPatient(currentUser.id);
   const totalSpent = allAppointments
     .filter((a) => a.paymentStatus === "completed")
     .reduce((sum, a) => sum + a.paymentAmount, 0);
+
+  // Generate monthly data from actual appointments
+  const monthlyData = Array.from({ length: 6 }, (_, i) => {
+    const date = new Date();
+    date.setMonth(date.getMonth() - (5 - i));
+    const month = date.toLocaleString("en-US", { month: "short" });
+    const year = date.getFullYear();
+    const monthStr = `${year}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    const count = allAppointments.filter((a) => a.date.startsWith(monthStr)).length;
+    return { month, appointments: count };
+  });
 
   const pieData = [
     { name: "Confirmed", value: allAppointments.filter((a) => a.status === "confirmed").length },
@@ -88,7 +111,7 @@ export default function PatientDashboard() {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-            Welcome back, <span className="text-gradient">{currentUser.name.split(" ")[0]}</span> 👋
+            Welcome back, <span className="text-gradient">{session.user.name?.split(" ")[0]}</span> 👋
           </h1>
           <p className="text-muted-foreground mt-1">
             Here&apos;s an overview of your health journey
@@ -318,47 +341,54 @@ export default function PatientDashboard() {
           </Link>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
-            {notifications.slice(0, 4).map((notif) => (
-              <div
-                key={notif.id}
-                className={`flex items-start gap-3 rounded-xl p-3 transition-colors ${
-                  !notif.read ? "bg-primary/5" : "hover:bg-muted/50"
-                }`}
-              >
+          {notifications.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <Bell className="h-10 w-10 text-muted-foreground/30 mb-3" />
+              <p className="text-sm text-muted-foreground">No notifications yet</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {notifications.slice(0, 4).map((notif) => (
                 <div
-                  className={`mt-0.5 flex h-8 w-8 items-center justify-center rounded-lg ${
-                    notif.type === "appointment"
-                      ? "bg-blue-500/10 text-blue-500"
-                      : notif.type === "prescription"
-                      ? "bg-purple-500/10 text-purple-500"
-                      : notif.type === "payment"
-                      ? "bg-emerald-500/10 text-emerald-500"
-                      : "bg-amber-500/10 text-amber-500"
+                  key={notif.id}
+                  className={`flex items-start gap-3 rounded-xl p-3 transition-colors ${
+                    !notif.read ? "bg-primary/5" : "hover:bg-muted/50"
                   }`}
                 >
-                  {notif.type === "appointment" ? (
-                    <Calendar className="h-4 w-4" />
-                  ) : notif.type === "prescription" ? (
-                    <FileText className="h-4 w-4" />
-                  ) : notif.type === "payment" ? (
-                    <CreditCard className="h-4 w-4" />
-                  ) : (
-                    <Bell className="h-4 w-4" />
+                  <div
+                    className={`mt-0.5 flex h-8 w-8 items-center justify-center rounded-lg ${
+                      notif.type === "appointment"
+                        ? "bg-blue-500/10 text-blue-500"
+                        : notif.type === "prescription"
+                        ? "bg-purple-500/10 text-purple-500"
+                        : notif.type === "payment"
+                        ? "bg-emerald-500/10 text-emerald-500"
+                        : "bg-amber-500/10 text-amber-500"
+                    }`}
+                  >
+                    {notif.type === "appointment" ? (
+                      <Calendar className="h-4 w-4" />
+                    ) : notif.type === "prescription" ? (
+                      <FileText className="h-4 w-4" />
+                    ) : notif.type === "payment" ? (
+                      <CreditCard className="h-4 w-4" />
+                    ) : (
+                      <Bell className="h-4 w-4" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">{notif.title}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                      {notif.message}
+                    </p>
+                  </div>
+                  {!notif.read && (
+                    <span className="h-2 w-2 rounded-full bg-primary mt-2 shrink-0" />
                   )}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium">{notif.title}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                    {notif.message}
-                  </p>
-                </div>
-                {!notif.read && (
-                  <span className="h-2 w-2 rounded-full bg-primary mt-2 shrink-0" />
-                )}
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

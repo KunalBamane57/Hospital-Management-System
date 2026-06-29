@@ -1,12 +1,10 @@
 // ============================================
 // Zustand Store - Hospital Appointment Booking System
+// Now integrated with MongoDB via API routes
 // ============================================
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 import {
-  User,
-  Patient,
   Doctor,
   Appointment,
   Prescription,
@@ -15,333 +13,324 @@ import {
   AppointmentStatus,
   PaymentStatus,
 } from "@/types";
-import {
-  mockDoctors,
-  mockPatients,
-  mockAppointments,
-  mockPrescriptions,
-  mockReviews,
-  mockNotifications,
-} from "@/data/mock-data";
 
 interface AppState {
-  // Auth
-  currentUser: User | null;
-  isAuthenticated: boolean;
-  login: (email: string, password: string, role: "patient" | "doctor") => boolean;
-  register: (data: Partial<Patient>) => boolean;
-  logout: () => void;
+  // Loading states
+  isLoading: boolean;
+  setLoading: (loading: boolean) => void;
 
   // Doctors
   doctors: Doctor[];
+  fetchDoctors: (specialization?: string, search?: string) => Promise<void>;
   getDoctorById: (id: string) => Doctor | undefined;
-
-  // Patients
-  patients: Patient[];
-  getPatientById: (id: string) => Patient | undefined;
+  fetchDoctorById: (id: string) => Promise<Doctor | null>;
 
   // Appointments
   appointments: Appointment[];
+  fetchAppointments: (status?: string) => Promise<void>;
   getAppointmentsByPatient: (patientId: string) => Appointment[];
   getAppointmentsByDoctor: (doctorId: string) => Appointment[];
   getUpcomingAppointments: (userId: string, role: "patient" | "doctor") => Appointment[];
-  bookAppointment: (appointment: Omit<Appointment, "id" | "createdAt" | "updatedAt">) => void;
-  updateAppointmentStatus: (appointmentId: string, status: AppointmentStatus) => void;
-  updatePaymentStatus: (appointmentId: string, status: PaymentStatus) => void;
-  rescheduleAppointment: (appointmentId: string, newDate: string, newTime: string) => void;
-  addDiagnosis: (appointmentId: string, diagnosis: string, notes: string) => void;
+  bookAppointment: (appointment: Omit<Appointment, "id" | "createdAt" | "updatedAt">) => Promise<boolean>;
+  updateAppointmentStatus: (appointmentId: string, status: AppointmentStatus) => Promise<void>;
+  updatePaymentStatus: (appointmentId: string, status: PaymentStatus) => Promise<void>;
+  rescheduleAppointment: (appointmentId: string, newDate: string, newTime: string) => Promise<void>;
+  addDiagnosis: (appointmentId: string, diagnosis: string, notes: string) => Promise<void>;
 
   // Prescriptions
   prescriptions: Prescription[];
+  fetchPrescriptions: () => Promise<void>;
   getPrescriptionsByPatient: (patientId: string) => Prescription[];
   getPrescriptionsByDoctor: (doctorId: string) => Prescription[];
-  addPrescription: (prescription: Omit<Prescription, "id" | "createdAt">) => void;
+  addPrescription: (prescription: Omit<Prescription, "id" | "createdAt">) => Promise<boolean>;
 
   // Reviews
   reviews: Review[];
+  fetchReviews: (doctorId?: string) => Promise<void>;
   getReviewsByDoctor: (doctorId: string) => Review[];
-  addReview: (review: Omit<Review, "id" | "createdAt">) => void;
+  addReview: (review: Omit<Review, "id" | "createdAt">) => Promise<boolean>;
 
   // Notifications
   notifications: Notification[];
+  fetchNotifications: () => Promise<void>;
   getNotificationsByUser: (userId: string) => Notification[];
-  markNotificationRead: (notificationId: string) => void;
-  markAllNotificationsRead: (userId: string) => void;
-  addNotification: (notification: Omit<Notification, "id" | "createdAt">) => void;
-
-  // Profile
-  updateProfile: (userId: string, data: Partial<User>) => void;
+  markNotificationRead: (notificationId: string) => Promise<void>;
+  markAllNotificationsRead: (userId: string) => Promise<void>;
 }
 
-export const useAppStore = create<AppState>()(
-  persist(
-    (set, get) => ({
-      // ---- Auth State ----
-      currentUser: null,
-      isAuthenticated: false,
+export const useAppStore = create<AppState>()((set, get) => ({
+  // ---- Loading ----
+  isLoading: false,
+  setLoading: (loading: boolean) => set({ isLoading: loading }),
 
-      login: (email: string, _password: string, role: "patient" | "doctor") => {
-        if (role === "patient") {
-          const patient = mockPatients.find((p) => p.email === email);
-          if (patient) {
-            set({ currentUser: patient, isAuthenticated: true });
-            return true;
-          }
-        } else {
-          const doctor = mockDoctors.find((d) => d.email === email);
-          if (doctor) {
-            set({ currentUser: doctor, isAuthenticated: true });
-            return true;
-          }
-        }
-        // For demo: allow any email login
-        const demoUser: User =
-          role === "patient"
-            ? { ...mockPatients[0], email }
-            : { ...mockDoctors[0], email };
-        set({ currentUser: demoUser, isAuthenticated: true });
-        return true;
-      },
+  // ---- Doctors ----
+  doctors: [],
 
-      register: (data: Partial<Patient>) => {
-        const newPatient: Patient = {
-          id: `pat-${Date.now()}`,
-          name: data.name || "New Patient",
-          email: data.email || "",
-          role: "patient",
-          phone: data.phone || "",
-          avatar: "/avatars/patient-1.jpg",
-          dateOfBirth: data.dateOfBirth || "",
-          gender: data.gender || "other",
-          bloodGroup: data.bloodGroup || "O+",
-          address: data.address || "",
-          emergencyContact: data.emergencyContact || "",
-          medicalHistory: [],
-          allergies: [],
-          createdAt: new Date().toISOString().split("T")[0],
-        };
-        set((state) => ({
-          patients: [...state.patients, newPatient],
-          currentUser: newPatient,
-          isAuthenticated: true,
-        }));
-        return true;
-      },
-
-      logout: () => {
-        set({ currentUser: null, isAuthenticated: false });
-      },
-
-      // ---- Doctors ----
-      doctors: mockDoctors,
-      getDoctorById: (id: string) => get().doctors.find((d) => d.id === id),
-
-      // ---- Patients ----
-      patients: mockPatients,
-      getPatientById: (id: string) => get().patients.find((p) => p.id === id),
-
-      // ---- Appointments ----
-      appointments: mockAppointments,
-
-      getAppointmentsByPatient: (patientId: string) =>
-        get().appointments.filter((a) => a.patientId === patientId),
-
-      getAppointmentsByDoctor: (doctorId: string) =>
-        get().appointments.filter((a) => a.doctorId === doctorId),
-
-      getUpcomingAppointments: (userId: string, role: "patient" | "doctor") => {
-        const today = new Date().toISOString().split("T")[0];
-        return get()
-          .appointments.filter(
-            (a) =>
-              (role === "patient" ? a.patientId === userId : a.doctorId === userId) &&
-              a.date >= today &&
-              (a.status === "confirmed" || a.status === "pending")
-          )
-          .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
-      },
-
-      bookAppointment: (appointment) => {
-        const newAppointment: Appointment = {
-          ...appointment,
-          id: `apt-${Date.now()}`,
-          createdAt: new Date().toISOString().split("T")[0],
-          updatedAt: new Date().toISOString().split("T")[0],
-        };
-        set((state) => ({
-          appointments: [...state.appointments, newAppointment],
-        }));
-      },
-
-      updateAppointmentStatus: (appointmentId: string, status: AppointmentStatus) => {
-        set((state) => ({
-          appointments: state.appointments.map((a) =>
-            a.id === appointmentId
-              ? { ...a, status, updatedAt: new Date().toISOString().split("T")[0] }
-              : a
-          ),
-        }));
-      },
-
-      updatePaymentStatus: (appointmentId: string, status: PaymentStatus) => {
-        set((state) => ({
-          appointments: state.appointments.map((a) =>
-            a.id === appointmentId
-              ? { ...a, paymentStatus: status, updatedAt: new Date().toISOString().split("T")[0] }
-              : a
-          ),
-        }));
-      },
-
-      rescheduleAppointment: (appointmentId: string, newDate: string, newTime: string) => {
-        set((state) => ({
-          appointments: state.appointments.map((a) =>
-            a.id === appointmentId
-              ? {
-                  ...a,
-                  date: newDate,
-                  time: newTime,
-                  status: "rescheduled" as AppointmentStatus,
-                  updatedAt: new Date().toISOString().split("T")[0],
-                }
-              : a
-          ),
-        }));
-      },
-
-      addDiagnosis: (appointmentId: string, diagnosis: string, notes: string) => {
-        set((state) => ({
-          appointments: state.appointments.map((a) =>
-            a.id === appointmentId
-              ? {
-                  ...a,
-                  diagnosis,
-                  notes,
-                  updatedAt: new Date().toISOString().split("T")[0],
-                }
-              : a
-          ),
-        }));
-      },
-
-      // ---- Prescriptions ----
-      prescriptions: mockPrescriptions,
-
-      getPrescriptionsByPatient: (patientId: string) =>
-        get().prescriptions.filter((p) => p.patientId === patientId),
-
-      getPrescriptionsByDoctor: (doctorId: string) =>
-        get().prescriptions.filter((p) => p.doctorId === doctorId),
-
-      addPrescription: (prescription) => {
-        const newPrescription: Prescription = {
-          ...prescription,
-          id: `presc-${Date.now()}`,
-          createdAt: new Date().toISOString().split("T")[0],
-        };
-        set((state) => ({
-          prescriptions: [...state.prescriptions, newPrescription],
-          appointments: state.appointments.map((a) =>
-            a.id === prescription.appointmentId
-              ? { ...a, prescriptionId: newPrescription.id }
-              : a
-          ),
-        }));
-      },
-
-      // ---- Reviews ----
-      reviews: mockReviews,
-
-      getReviewsByDoctor: (doctorId: string) =>
-        get().reviews.filter((r) => r.doctorId === doctorId),
-
-      addReview: (review) => {
-        const newReview: Review = {
-          ...review,
-          id: `rev-${Date.now()}`,
-          createdAt: new Date().toISOString().split("T")[0],
-        };
-        set((state) => {
-          const doctorReviews = [...state.reviews.filter((r) => r.doctorId === review.doctorId), newReview];
-          const avgRating =
-            doctorReviews.reduce((sum, r) => sum + r.rating, 0) / doctorReviews.length;
-          return {
-            reviews: [...state.reviews, newReview],
-            doctors: state.doctors.map((d) =>
-              d.id === review.doctorId
-                ? { ...d, rating: Math.round(avgRating * 10) / 10, totalReviews: d.totalReviews + 1 }
-                : d
-            ),
-          };
-        });
-      },
-
-      // ---- Notifications ----
-      notifications: mockNotifications,
-
-      getNotificationsByUser: (userId: string) =>
-        get()
-          .notifications.filter((n) => n.userId === userId)
-          .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-
-      markNotificationRead: (notificationId: string) => {
-        set((state) => ({
-          notifications: state.notifications.map((n) =>
-            n.id === notificationId ? { ...n, read: true } : n
-          ),
-        }));
-      },
-
-      markAllNotificationsRead: (userId: string) => {
-        set((state) => ({
-          notifications: state.notifications.map((n) =>
-            n.userId === userId ? { ...n, read: true } : n
-          ),
-        }));
-      },
-
-      addNotification: (notification) => {
-        const newNotification: Notification = {
-          ...notification,
-          id: `notif-${Date.now()}`,
-          createdAt: new Date().toISOString().split("T")[0],
-        };
-        set((state) => ({
-          notifications: [...state.notifications, newNotification],
-        }));
-      },
-
-      // ---- Profile ----
-      updateProfile: (userId: string, data: Partial<User>) => {
-        set((state) => {
-          const isDoctor = state.currentUser?.role === "doctor";
-          const updatedUser = state.currentUser?.id === userId
-            ? { ...state.currentUser, ...data }
-            : state.currentUser;
-
-          if (isDoctor) {
-            return {
-              doctors: state.doctors.map((d) =>
-                d.id === userId ? { ...d, ...data, role: "doctor" as const } : d
-              ),
-              currentUser: updatedUser,
-            };
-          }
-          return {
-            patients: state.patients.map((p) =>
-              p.id === userId ? { ...p, ...data, role: "patient" as const } as Patient : p
-            ),
-            currentUser: updatedUser,
-          };
-        });
-      },
-    }),
-    {
-      name: "hospital-booking-store",
-      partialize: (state) => ({
-        currentUser: state.currentUser,
-        isAuthenticated: state.isAuthenticated,
-      }),
+  fetchDoctors: async (specialization?: string, search?: string) => {
+    try {
+      const params = new URLSearchParams();
+      if (specialization) params.set("specialization", specialization);
+      if (search) params.set("search", search);
+      const res = await fetch(`/api/doctors?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        set({ doctors: data });
+      }
+    } catch (error) {
+      console.error("Failed to fetch doctors:", error);
     }
-  )
-);
+  },
+
+  getDoctorById: (id: string) => get().doctors.find((d) => d.id === id),
+
+  fetchDoctorById: async (id: string) => {
+    try {
+      const res = await fetch(`/api/doctors?id=${id}`);
+      if (res.ok) {
+        return await res.json();
+      }
+      return null;
+    } catch (error) {
+      console.error("Failed to fetch doctor:", error);
+      return null;
+    }
+  },
+
+  // ---- Appointments ----
+  appointments: [],
+
+  fetchAppointments: async (status?: string) => {
+    try {
+      const params = new URLSearchParams();
+      if (status) params.set("status", status);
+      const res = await fetch(`/api/appointments?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        set({ appointments: data });
+      }
+    } catch (error) {
+      console.error("Failed to fetch appointments:", error);
+    }
+  },
+
+  getAppointmentsByPatient: (patientId: string) =>
+    get().appointments.filter((a) => a.patientId === patientId),
+
+  getAppointmentsByDoctor: (doctorId: string) =>
+    get().appointments.filter((a) => a.doctorId === doctorId),
+
+  getUpcomingAppointments: (userId: string, role: "patient" | "doctor") => {
+    const today = new Date().toISOString().split("T")[0];
+    return get()
+      .appointments.filter(
+        (a) =>
+          (role === "patient" ? a.patientId === userId : a.doctorId === userId) &&
+          a.date >= today &&
+          (a.status === "confirmed" || a.status === "pending")
+      )
+      .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+  },
+
+  bookAppointment: async (appointment) => {
+    try {
+      const res = await fetch("/api/appointments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(appointment),
+      });
+      if (res.ok) {
+        await get().fetchAppointments();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Failed to book appointment:", error);
+      return false;
+    }
+  },
+
+  updateAppointmentStatus: async (appointmentId: string, status: AppointmentStatus) => {
+    try {
+      await fetch("/api/appointments", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appointmentId, status }),
+      });
+      await get().fetchAppointments();
+    } catch (error) {
+      console.error("Failed to update appointment:", error);
+    }
+  },
+
+  updatePaymentStatus: async (appointmentId: string, paymentStatus: PaymentStatus) => {
+    try {
+      await fetch("/api/appointments", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appointmentId, paymentStatus }),
+      });
+      await get().fetchAppointments();
+    } catch (error) {
+      console.error("Failed to update payment:", error);
+    }
+  },
+
+  rescheduleAppointment: async (appointmentId: string, newDate: string, newTime: string) => {
+    try {
+      await fetch("/api/appointments", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appointmentId, date: newDate, time: newTime }),
+      });
+      await get().fetchAppointments();
+    } catch (error) {
+      console.error("Failed to reschedule:", error);
+    }
+  },
+
+  addDiagnosis: async (appointmentId: string, diagnosis: string, notes: string) => {
+    try {
+      await fetch("/api/appointments", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appointmentId, diagnosis, notes }),
+      });
+      await get().fetchAppointments();
+    } catch (error) {
+      console.error("Failed to add diagnosis:", error);
+    }
+  },
+
+  // ---- Prescriptions ----
+  prescriptions: [],
+
+  fetchPrescriptions: async () => {
+    try {
+      const res = await fetch("/api/prescriptions");
+      if (res.ok) {
+        const data = await res.json();
+        set({ prescriptions: data });
+      }
+    } catch (error) {
+      console.error("Failed to fetch prescriptions:", error);
+    }
+  },
+
+  getPrescriptionsByPatient: (patientId: string) =>
+    get().prescriptions.filter((p) => p.patientId === patientId),
+
+  getPrescriptionsByDoctor: (doctorId: string) =>
+    get().prescriptions.filter((p) => p.doctorId === doctorId),
+
+  addPrescription: async (prescription) => {
+    try {
+      const res = await fetch("/api/prescriptions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(prescription),
+      });
+      if (res.ok) {
+        await get().fetchPrescriptions();
+        await get().fetchAppointments();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Failed to add prescription:", error);
+      return false;
+    }
+  },
+
+  // ---- Reviews ----
+  reviews: [],
+
+  fetchReviews: async (doctorId?: string) => {
+    try {
+      const params = new URLSearchParams();
+      if (doctorId) params.set("doctorId", doctorId);
+      const res = await fetch(`/api/reviews?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        set({ reviews: data });
+      }
+    } catch (error) {
+      console.error("Failed to fetch reviews:", error);
+    }
+  },
+
+  getReviewsByDoctor: (doctorId: string) =>
+    get().reviews.filter((r) => r.doctorId === doctorId),
+
+  addReview: async (review) => {
+    try {
+      const res = await fetch("/api/reviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(review),
+      });
+      if (res.ok) {
+        await get().fetchReviews();
+        await get().fetchDoctors();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Failed to add review:", error);
+      return false;
+    }
+  },
+
+  // ---- Notifications ----
+  notifications: [],
+
+  fetchNotifications: async () => {
+    try {
+      const res = await fetch("/api/notifications");
+      if (res.ok) {
+        const data = await res.json();
+        set({ notifications: data });
+      }
+    } catch (error) {
+      console.error("Failed to fetch notifications:", error);
+    }
+  },
+
+  getNotificationsByUser: (userId: string) =>
+    get()
+      .notifications.filter((n) => n.userId === userId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+
+  markNotificationRead: async (notificationId: string) => {
+    try {
+      await fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notificationId }),
+      });
+      set((state) => ({
+        notifications: state.notifications.map((n) =>
+          n.id === notificationId ? { ...n, read: true } : n
+        ),
+      }));
+    } catch (error) {
+      console.error("Failed to mark notification read:", error);
+    }
+  },
+
+  markAllNotificationsRead: async (userId: string) => {
+    try {
+      await fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ markAll: true }),
+      });
+      set((state) => ({
+        notifications: state.notifications.map((n) =>
+          n.userId === userId ? { ...n, read: true } : n
+        ),
+      }));
+    } catch (error) {
+      console.error("Failed to mark all notifications read:", error);
+    }
+  },
+}));

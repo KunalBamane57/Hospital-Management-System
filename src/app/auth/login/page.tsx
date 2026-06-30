@@ -8,12 +8,13 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Activity, Loader2, Stethoscope, User } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Activity, Loader2, Stethoscope, User, Shield } from "lucide-react";
 import { toast } from "sonner";
+import { getDashboardPath, type UserRole } from "@/lib/permissions";
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email"),
@@ -22,9 +23,21 @@ const loginSchema = z.object({
 
 type LoginForm = z.infer<typeof loginSchema>;
 
+const ROLE_LABELS: Record<UserRole, string> = {
+  patient: "Patient",
+  doctor: "Doctor",
+  admin: "Admin",
+};
+
+const ROLE_PLACEHOLDERS: Record<UserRole, string> = {
+  patient: "patient@example.com",
+  doctor: "doctor@medicore.com",
+  admin: "admin@medicore.com",
+};
+
 export default function LoginPage() {
   const router = useRouter();
-  const [role, setRole] = useState<"patient" | "doctor">("patient");
+  const [role, setRole] = useState<UserRole>("patient");
   const [isLoading, setIsLoading] = useState(false);
 
   const {
@@ -49,9 +62,9 @@ export default function LoginPage() {
         toast.error("Login failed", { description: result.error });
       } else {
         toast.success("Welcome back!", {
-          description: `You've been logged in as a ${role}.`,
+          description: `You've been logged in as ${ROLE_LABELS[role]}.`,
         });
-        router.push(`/${role}/dashboard`);
+        router.push(getDashboardPath(role));
         router.refresh();
       }
     } catch {
@@ -88,10 +101,10 @@ export default function LoginPage() {
           <CardHeader className="pb-4">
             <Tabs
               value={role}
-              onValueChange={(v) => setRole(v as "patient" | "doctor")}
+              onValueChange={(v) => setRole(v as UserRole)}
               className="w-full"
             >
-              <TabsList className="grid w-full grid-cols-2 h-12 rounded-xl">
+              <TabsList className="grid w-full grid-cols-3 h-12 rounded-xl">
                 <TabsTrigger value="patient" className="rounded-lg gap-2 text-sm">
                   <User className="h-4 w-4" />
                   Patient
@@ -99,6 +112,10 @@ export default function LoginPage() {
                 <TabsTrigger value="doctor" className="rounded-lg gap-2 text-sm">
                   <Stethoscope className="h-4 w-4" />
                   Doctor
+                </TabsTrigger>
+                <TabsTrigger value="admin" className="rounded-lg gap-2 text-sm">
+                  <Shield className="h-4 w-4" />
+                  Admin
                 </TabsTrigger>
               </TabsList>
             </Tabs>
@@ -110,11 +127,7 @@ export default function LoginPage() {
                 <Input
                   id="email"
                   type="email"
-                  placeholder={
-                    role === "patient"
-                      ? "patient@example.com"
-                      : "doctor@medicore.com"
-                  }
+                  placeholder={ROLE_PLACEHOLDERS[role]}
                   className="h-11 rounded-xl"
                   {...register("email")}
                 />
@@ -146,7 +159,7 @@ export default function LoginPage() {
                 {isLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  `Sign In as ${role === "patient" ? "Patient" : "Doctor"}`
+                  `Sign In as ${ROLE_LABELS[role]}`
                 )}
               </Button>
             </form>

@@ -37,6 +37,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           throw new Error("No account found with this email");
         }
 
+        // Check if user is active
+        if (user.isActive === false) {
+          throw new Error("Your account has been deactivated. Contact an administrator.");
+        }
+
         // If a specific role is requested, verify it matches
         if (credentials.role && user.role !== credentials.role) {
           throw new Error(

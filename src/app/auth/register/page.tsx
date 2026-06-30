@@ -13,8 +13,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Activity, Loader2, Stethoscope, User } from "lucide-react";
+import { Activity, Loader2, Stethoscope, User, Shield } from "lucide-react";
 import { toast } from "sonner";
+import { getDashboardPath, ROLE_META, type UserRole } from "@/lib/permissions";
 
 const patientSchema = z
   .object({
@@ -48,37 +49,53 @@ const doctorSchema = z
     path: ["confirmPassword"],
   });
 
+const adminSchema = z
+  .object({
+    name: z.string().min(2, "Name must be at least 2 characters"),
+    email: z.string().email("Please enter a valid email"),
+    phone: z.string().min(10, "Please enter a valid phone number"),
+    password: z.string().min(6, "Password must be at least 6 characters"),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords don't match",
+    path: ["confirmPassword"],
+  });
+
 type PatientForm = z.infer<typeof patientSchema>;
 type DoctorForm = z.infer<typeof doctorSchema>;
+type AdminForm = z.infer<typeof adminSchema>;
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [role, setRole] = useState<"patient" | "doctor">("patient");
+  const [role, setRole] = useState<UserRole>("patient");
   const [isLoading, setIsLoading] = useState(false);
 
-  const patientForm = useForm<PatientForm>({
-    resolver: zodResolver(patientSchema),
-  });
+  const patientForm = useForm<PatientForm>({ resolver: zodResolver(patientSchema) });
+  const doctorForm = useForm<DoctorForm>({ resolver: zodResolver(doctorSchema) });
+  const adminForm = useForm<AdminForm>({ resolver: zodResolver(adminSchema) });
 
-  const doctorForm = useForm<DoctorForm>({
-    resolver: zodResolver(doctorSchema),
-  });
-
-  const onSubmitPatient = async (data: PatientForm) => {
+  const handleRegister = async (data: Record<string, unknown>) => {
     setIsLoading(true);
     try {
+      const name = role === "doctor" ? `Dr. ${data.name}` : (data.name as string);
+      const body: Record<string, unknown> = { role, name, email: data.email, password: data.password, phone: data.phone };
+
+      if (role === "patient") {
+        body.gender = data.gender;
+        body.dateOfBirth = data.dateOfBirth;
+      } else if (role === "doctor") {
+        body.specialization = data.specialization;
+        body.experience = parseInt(data.experience as string);
+        body.qualification = data.qualification;
+        body.consultationFee = parseInt(data.consultationFee as string);
+        body.department = data.specialization;
+      }
+
       const res = await fetch("/api/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          role: "patient",
-          name: data.name,
-          email: data.email,
-          password: data.password,
-          phone: data.phone,
-          gender: data.gender,
-          dateOfBirth: data.dateOfBirth,
-        }),
+        body: JSON.stringify(body),
       });
       const result = await res.json();
       if (!res.ok) {
@@ -87,61 +104,17 @@ export default function RegisterPage() {
         return;
       }
       toast.success("Account created!", {
-        description: `Your Patient ID is ${result.userId}. Logging you in...`,
+        description: `Your ${ROLE_META[role].label} ID is ${result.userId}. Logging you in...`,
       });
-      // Auto sign-in after registration
-      const signInResult = await signIn("credentials", {
-        email: data.email,
-        password: data.password,
-        role: "patient",
-        redirect: false,
-      });
-      if (signInResult?.ok) {
-        router.push("/patient/dashboard");
-        router.refresh();
-      }
-    } catch {
-      toast.error("Registration failed", { description: "An unexpected error occurred." });
-    }
-    setIsLoading(false);
-  };
 
-  const onSubmitDoctor = async (data: DoctorForm) => {
-    setIsLoading(true);
-    try {
-      const res = await fetch("/api/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          role: "doctor",
-          name: `Dr. ${data.name}`,
-          email: data.email,
-          password: data.password,
-          phone: data.phone,
-          specialization: data.specialization,
-          experience: parseInt(data.experience),
-          qualification: data.qualification,
-          consultationFee: parseInt(data.consultationFee),
-          department: data.specialization,
-        }),
-      });
-      const result = await res.json();
-      if (!res.ok) {
-        toast.error("Registration failed", { description: result.error });
-        setIsLoading(false);
-        return;
-      }
-      toast.success("Account created!", {
-        description: `Your Doctor ID is ${result.userId}. Logging you in...`,
-      });
       const signInResult = await signIn("credentials", {
-        email: data.email,
-        password: data.password,
-        role: "doctor",
+        email: data.email as string,
+        password: data.password as string,
+        role,
         redirect: false,
       });
       if (signInResult?.ok) {
-        router.push("/doctor/dashboard");
+        router.push(getDashboardPath(role));
         router.refresh();
       }
     } catch {
@@ -152,14 +125,12 @@ export default function RegisterPage() {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center px-4 py-12">
-      {/* Background */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -top-40 -right-40 h-[500px] w-[500px] rounded-full bg-primary/5 blur-3xl" />
         <div className="absolute -bottom-40 -left-40 h-[500px] w-[500px] rounded-full bg-accent/20 blur-3xl" />
       </div>
 
       <div className="relative w-full max-w-md animate-scale-in">
-        {/* Logo */}
         <div className="mb-8 flex flex-col items-center gap-3">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl gradient-primary shadow-xl shadow-primary/30">
             <Activity className="h-7 w-7 text-white" />
@@ -176,27 +147,23 @@ export default function RegisterPage() {
 
         <Card className="border-0 shadow-2xl">
           <CardContent className="pt-6">
-            {/* Role Tabs */}
-            <Tabs
-              value={role}
-              onValueChange={(v) => setRole(v as "patient" | "doctor")}
-              className="mb-6"
-            >
-              <TabsList className="grid w-full grid-cols-2 h-12 rounded-xl">
+            <Tabs value={role} onValueChange={(v) => setRole(v as UserRole)} className="mb-6">
+              <TabsList className="grid w-full grid-cols-3 h-12 rounded-xl">
                 <TabsTrigger value="patient" className="rounded-lg gap-2 text-sm">
-                  <User className="h-4 w-4" />
-                  Patient
+                  <User className="h-4 w-4" /> Patient
                 </TabsTrigger>
                 <TabsTrigger value="doctor" className="rounded-lg gap-2 text-sm">
-                  <Stethoscope className="h-4 w-4" />
-                  Doctor
+                  <Stethoscope className="h-4 w-4" /> Doctor
+                </TabsTrigger>
+                <TabsTrigger value="admin" className="rounded-lg gap-2 text-sm">
+                  <Shield className="h-4 w-4" /> Admin
                 </TabsTrigger>
               </TabsList>
             </Tabs>
 
             {/* Patient Form */}
             {role === "patient" && (
-              <form onSubmit={patientForm.handleSubmit(onSubmitPatient)} className="space-y-4">
+              <form onSubmit={patientForm.handleSubmit((d) => handleRegister(d))} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="pat-name">Full Name</Label>
                   <Input id="pat-name" placeholder="John Anderson" className="h-11 rounded-xl" {...patientForm.register("name")} />
@@ -249,7 +216,7 @@ export default function RegisterPage() {
 
             {/* Doctor Form */}
             {role === "doctor" && (
-              <form onSubmit={doctorForm.handleSubmit(onSubmitDoctor)} className="space-y-4">
+              <form onSubmit={doctorForm.handleSubmit((d) => handleRegister(d))} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="doc-name">Full Name</Label>
                   <Input id="doc-name" placeholder="Sarah Chen" className="h-11 rounded-xl" {...doctorForm.register("name")} />
@@ -315,6 +282,40 @@ export default function RegisterPage() {
                 </div>
                 <Button type="submit" disabled={isLoading} className="w-full h-11 rounded-xl gradient-primary text-white border-0 shadow-lg shadow-primary/25">
                   {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create Doctor Account"}
+                </Button>
+              </form>
+            )}
+
+            {/* Admin Form */}
+            {role === "admin" && (
+              <form onSubmit={adminForm.handleSubmit((d) => handleRegister(d))} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="adm-name">Full Name</Label>
+                  <Input id="adm-name" placeholder="Admin User" className="h-11 rounded-xl" {...adminForm.register("name")} />
+                  {adminForm.formState.errors.name && <p className="text-xs text-destructive">{adminForm.formState.errors.name.message}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="adm-email">Email</Label>
+                  <Input id="adm-email" type="email" placeholder="admin@medicore.com" className="h-11 rounded-xl" {...adminForm.register("email")} />
+                  {adminForm.formState.errors.email && <p className="text-xs text-destructive">{adminForm.formState.errors.email.message}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="adm-phone">Phone Number</Label>
+                  <Input id="adm-phone" type="tel" placeholder="+1-555-0001" className="h-11 rounded-xl" {...adminForm.register("phone")} />
+                  {adminForm.formState.errors.phone && <p className="text-xs text-destructive">{adminForm.formState.errors.phone.message}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="adm-password">Password</Label>
+                  <Input id="adm-password" type="password" placeholder="••••••••" className="h-11 rounded-xl" {...adminForm.register("password")} />
+                  {adminForm.formState.errors.password && <p className="text-xs text-destructive">{adminForm.formState.errors.password.message}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="adm-confirm">Confirm Password</Label>
+                  <Input id="adm-confirm" type="password" placeholder="••••••••" className="h-11 rounded-xl" {...adminForm.register("confirmPassword")} />
+                  {adminForm.formState.errors.confirmPassword && <p className="text-xs text-destructive">{adminForm.formState.errors.confirmPassword.message}</p>}
+                </div>
+                <Button type="submit" disabled={isLoading} className="w-full h-11 rounded-xl gradient-primary text-white border-0 shadow-lg shadow-primary/25">
+                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create Admin Account"}
                 </Button>
               </form>
             )}

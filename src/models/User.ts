@@ -5,13 +5,14 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
 
 export interface IUser extends Document {
-  userId: string; // PAT-1001 or DOC-1001
+  userId: string; // PAT-1001, DOC-1001, ADM-1001
   name: string;
   email: string;
   password: string;
-  role: "patient" | "doctor";
+  role: "patient" | "doctor" | "admin";
   phone: string;
   avatar: string;
+  isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -45,7 +46,7 @@ const UserSchema = new Schema<IUser>(
     },
     role: {
       type: String,
-      enum: ["patient", "doctor"],
+      enum: ["patient", "doctor", "admin"],
       required: true,
     },
     phone: {
@@ -56,6 +57,10 @@ const UserSchema = new Schema<IUser>(
     avatar: {
       type: String,
       default: "",
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
     },
   },
   {

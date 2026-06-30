@@ -9,7 +9,7 @@ declare module "next-auth" {
   interface Session {
     user: {
       userId: string;
-      role: "patient" | "doctor";
+      role: "patient" | "doctor" | "admin";
       phone: string;
       avatar: string;
       dbId: string;

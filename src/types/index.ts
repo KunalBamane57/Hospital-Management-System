@@ -2,7 +2,7 @@
 // Hospital Appointment Booking System - Types
 // ============================================
 
-export type UserRole = "patient" | "doctor";
+export type UserRole = "patient" | "doctor" | "admin";
 
 export interface User {
   id: string;

@@ -95,14 +95,12 @@ export default function HomePage() {
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <Link href="/auth/login">
-              <Button variant="ghost" className="hidden sm:inline-flex">Log In</Button>
-            </Link>
-            <Link href="/auth/register">
-              <Button className="gradient-primary text-white border-0 shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-all">
-                Get Started
-              </Button>
-            </Link>
+            <Button render={<Link href="/auth/login" />} variant="ghost" className="hidden sm:inline-flex">
+              Log In
+            </Button>
+            <Button render={<Link href="/auth/register" />} className="gradient-primary text-white border-0 shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-all">
+              Get Started
+            </Button>
           </div>
         </div>
       </nav>
@@ -131,25 +129,23 @@ export default function HomePage() {
               and take control of your healthcare journey — all in one platform.
             </p>
             <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/auth/register">
-                <Button
-                  size="lg"
-                  className="gradient-primary text-white border-0 shadow-xl shadow-primary/30 hover:shadow-2xl hover:shadow-primary/40 transition-all h-13 px-8 text-base rounded-xl"
-                >
-                  Book Appointment
-                  <ArrowRight className="ml-2 h-5 w-5" />
-                </Button>
-              </Link>
-              <Link href="/auth/login">
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="h-13 px-8 text-base rounded-xl"
-                >
-                  <Users className="mr-2 h-5 w-5" />
-                  Doctor Login
-                </Button>
-              </Link>
+              <Button
+                render={<Link href="/auth/register" />}
+                size="lg"
+                className="gradient-primary text-white border-0 shadow-xl shadow-primary/30 hover:shadow-2xl hover:shadow-primary/40 transition-all h-13 px-8 text-base rounded-xl"
+              >
+                Book Appointment
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Button>
+              <Button
+                render={<Link href="/auth/login" />}
+                size="lg"
+                variant="outline"
+                className="h-13 px-8 text-base rounded-xl"
+              >
+                <Users className="mr-2 h-5 w-5" />
+                Doctor Login
+              </Button>
             </div>
           </div>
 
@@ -310,24 +306,22 @@ export default function HomePage() {
                 Book your first appointment today.
               </p>
               <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
-                <Link href="/auth/register">
-                  <Button
-                    size="lg"
-                    className="bg-white text-primary hover:bg-white/90 shadow-xl h-13 px-8 text-base rounded-xl font-semibold"
-                  >
-                    Create Free Account
-                    <ArrowRight className="ml-2 h-5 w-5" />
-                  </Button>
-                </Link>
-                <Link href="/auth/login">
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="border-white/30 text-white hover:bg-white/10 h-13 px-8 text-base rounded-xl bg-transparent"
-                  >
-                    Sign In
-                  </Button>
-                </Link>
+                <Button
+                  render={<Link href="/auth/register" />}
+                  size="lg"
+                  className="bg-white text-primary hover:bg-white/90 shadow-xl h-13 px-8 text-base rounded-xl font-semibold"
+                >
+                  Create Free Account
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </Button>
+                <Button
+                  render={<Link href="/auth/login" />}
+                  size="lg"
+                  variant="outline"
+                  className="border-white/30 text-white hover:bg-white/10 h-13 px-8 text-base rounded-xl bg-transparent"
+                >
+                  Sign In
+                </Button>
               </div>
             </div>
           </div>

@@ -29,6 +29,8 @@ import {
   CreditCard,
   UserCircle,
   Activity,
+  BarChart3,
+  Shield,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -52,14 +54,31 @@ const doctorNavItems = [
   { href: "/doctor/profile", icon: UserCircle, label: "Profile" },
 ];
 
+const adminNavItems = [
+  { href: "/admin/dashboard", icon: BarChart3, label: "Analytics" },
+  { href: "/admin/users", icon: Users, label: "User Management" },
+];
+
+const ROLE_NAV: Record<string, typeof patientNavItems> = {
+  patient: patientNavItems,
+  doctor: doctorNavItems,
+  admin: adminNavItems,
+};
+
+const ROLE_PORTAL: Record<string, string> = {
+  patient: "Patient Portal",
+  doctor: "Doctor Portal",
+  admin: "Admin Console",
+};
+
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { data: session } = useSession();
   const { notifications, fetchNotifications } = useAppStore();
 
   const user = session?.user;
-  const isDoctor = user?.role === "doctor";
-  const navItems = isDoctor ? doctorNavItems : patientNavItems;
+  const role = user?.role || "patient";
+  const navItems = ROLE_NAV[role] || patientNavItems;
 
   useEffect(() => {
     if (user?.userId) {
@@ -75,6 +94,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     await signOut({ callbackUrl: "/auth/login" });
   };
 
+  // For admin, notifications/settings link to patient routes (shared)
+  const secondaryBase = role === "admin" ? "/patient" : `/${role}`;
+
   return (
     <div className="flex h-full flex-col">
       {/* Logo */}
@@ -87,19 +109,24 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             Medi<span className="text-gradient">Core</span>
           </h1>
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-            {isDoctor ? "Doctor Portal" : "Patient Portal"}
+            {ROLE_PORTAL[role] || "Portal"}
           </p>
         </div>
       </div>
 
       <Separator className="mx-4" />
 
-      {/* User ID Badge */}
+      {/* User ID Badge + Role Badge */}
       {user?.userId && (
-        <div className="px-6 py-3">
+        <div className="px-6 py-3 flex items-center gap-2 flex-wrap">
           <Badge variant="outline" className="text-xs font-mono">
             ID: {user.userId}
           </Badge>
+          {role === "admin" && (
+            <Badge className="bg-purple-500/10 text-purple-600 border-purple-500/20 text-[10px]">
+              Admin
+            </Badge>
+          )}
         </div>
       )}
 
@@ -132,7 +159,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         {/* Secondary nav */}
         <nav className="space-y-1">
           <Link
-            href={`/${user?.role}/notifications`}
+            href={`${secondaryBase}/notifications`}
             onClick={onNavigate}
             className={cn(
               "flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200",
@@ -150,7 +177,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             )}
           </Link>
           <Link
-            href={`/${user?.role}/settings`}
+            href={`${secondaryBase}/settings`}
             onClick={onNavigate}
             className={cn(
               "flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200",

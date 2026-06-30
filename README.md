@@ -8,6 +8,7 @@ A modern, full-stack Hospital Appointment Booking and Management System built wi
 - **👨‍⚕️ Doctor Dashboard:** Doctors can manage their schedule, view upcoming appointments, write prescriptions, and review patient medical history.
 - **🤕 Patient Dashboard:** Patients can browse doctors by specialization, book appointments, view their upcoming/past visits, and manage their health profiles.
 - **⭐ Ratings & Reviews:** Patients can leave star ratings and reviews for doctors after completing an appointment.
+- **👨‍💼 Admin Dashboard:** A secure admin portal featuring interactive Recharts for hospital KPIs (revenue, appointments, growth) and full user management capabilities (change roles, deactivate, cascade delete).
 - **📊 Real-Time Database:** Fully integrated with MongoDB Atlas using Mongoose for strict schema validation.
 - **🎨 Premium UI/UX:** Built with shadcn/ui and Tailwind CSS featuring modern aesthetics, glassmorphism, and responsive design.
 
@@ -20,6 +21,7 @@ A modern, full-stack Hospital Appointment Booking and Management System built wi
 - **Styling:** Tailwind CSS & shadcn/ui
 - **State Management:** Zustand
 - **Form Validation:** Zod
+- **Data Visualization:** Recharts
 
 ## 🚀 Getting Started
 
@@ -44,10 +46,11 @@ NEXT_PUBLIC_APP_URL="http://localhost:3000"
 ```
 
 ### 3. Seed the Database
-Before running the application, you need to populate the database with initial counters, doctors, and sample appointments. Run the seed script:
+Before running the application, you need to populate the database with initial counters, doctors, and sample appointments. Run the seed scripts:
 
 ```bash
 npx tsx src/scripts/seed.ts
+npx tsx src/scripts/seed-admin.ts
 ```
 
 ### 4. Start the Development Server
@@ -67,6 +70,10 @@ After running the seed script, you can use the following default credentials to 
 ### Doctor Account
 - **Email:** `sarah.chen@medicore.com`
 - **Password:** `password123`
+
+### Admin Account
+- **Email:** `admin@medicore.com`
+- **Password:** `admin123`
 
 ## 🧹 Useful Commands
 

@@ -10,6 +10,12 @@ import Patient from "@/models/Patient";
 import Doctor from "@/models/Doctor";
 import { getNextSequence } from "@/models/Counter";
 
+const ROLE_PREFIX: Record<string, string> = {
+  patient: "PAT",
+  doctor: "DOC",
+  admin: "ADM",
+};
+
 export async function POST(request: NextRequest) {
   try {
     await dbConnect();
@@ -21,6 +27,13 @@ export async function POST(request: NextRequest) {
     if (!name || !email || !password || !phone || !role) {
       return NextResponse.json(
         { error: "All required fields must be provided" },
+        { status: 400 }
+      );
+    }
+
+    if (!["patient", "doctor", "admin"].includes(role)) {
+      return NextResponse.json(
+        { error: "Invalid role specified" },
         { status: 400 }
       );
     }
@@ -38,8 +51,8 @@ export async function POST(request: NextRequest) {
     const hashedPassword = await bcrypt.hash(password, 12);
 
     // Generate unique user ID
-    const prefix = role === "patient" ? "PAT" : "DOC";
-    const counterName = role === "patient" ? "patientId" : "doctorId";
+    const prefix = ROLE_PREFIX[role];
+    const counterName = `${role}Id`;
     const seq = await getNextSequence(counterName);
     const userId = `${prefix}-${seq}`;
 
@@ -52,6 +65,7 @@ export async function POST(request: NextRequest) {
       role,
       phone,
       avatar: "",
+      isActive: true,
     });
 
     // Create role-specific profile
@@ -85,6 +99,7 @@ export async function POST(request: NextRequest) {
         totalReviews: 0,
       });
     }
+    // Admin role doesn't need a separate profile document
 
     return NextResponse.json(
       {

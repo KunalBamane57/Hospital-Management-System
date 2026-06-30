@@ -75,13 +75,6 @@ After running the seed script, you can use the following default credentials to 
 - **Email:** `admin@medicore.com`
 - **Password:** `admin123`
 
-## 🧹 Useful Commands
-
-- **Delete a User:** If you need to manually delete a user and all of their related data (appointments, profiles, etc.) from the terminal, you can run:
-  ```bash
-  npx tsx src/scripts/delete-user.ts <USER_ID>
-  # Example: npx tsx src/scripts/delete-user.ts DOC-1001
-  ```
 
 ## 📄 License
 This project is open-source and available under the MIT License.

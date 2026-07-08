@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -29,6 +29,78 @@ const SUGGESTIONS = [
   "Tips for better sleep",
 ];
 
+// Helper to render formatted AI responses (bold, bullets, paragraphs)
+function FormattedContent({ content }: { content: string }) {
+  const lines = content.split("\n");
+
+  return (
+    <div className="space-y-2">
+      {lines.map((line, i) => {
+        const trimmed = line.trim();
+        if (!trimmed) return null;
+
+        // Bullet points: * or -
+        const bulletMatch = trimmed.match(/^[\*\-•]\s+(.+)/);
+        if (bulletMatch) {
+          return (
+            <div key={i} className="flex gap-1.5 items-start ml-1">
+              <span className="text-primary mt-1 text-[8px] leading-none">●</span>
+              <span>{renderInlineFormatting(bulletMatch[1])}</span>
+            </div>
+          );
+        }
+
+        // Numbered list: 1. or 1)
+        const numberMatch = trimmed.match(/^(\d+)[.)]\s+(.+)/);
+        if (numberMatch) {
+          return (
+            <div key={i} className="flex gap-1.5 items-start ml-1">
+              <span className="text-primary font-semibold text-xs min-w-[1rem]">{numberMatch[1]}.</span>
+              <span>{renderInlineFormatting(numberMatch[2])}</span>
+            </div>
+          );
+        }
+
+        // Regular paragraph
+        return (
+          <p key={i}>{renderInlineFormatting(trimmed)}</p>
+        );
+      })}
+    </div>
+  );
+}
+
+// Renders **bold** and *italic* inline
+function renderInlineFormatting(text: string): React.ReactNode {
+  const parts: React.ReactNode[] = [];
+  // Match **bold** and *italic* patterns
+  const regex = /(\*\*(.+?)\*\*|\*(.+?)\*)/g;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = regex.exec(text)) !== null) {
+    // Add text before the match
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+    if (match[2]) {
+      // **bold**
+      parts.push(<strong key={match.index} className="font-semibold">{match[2]}</strong>);
+    } else if (match[3]) {
+      // *italic*
+      parts.push(<em key={match.index}>{match[3]}</em>);
+    }
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Add remaining text
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+
+  return parts.length > 0 ? parts : text;
+}
+
 export default function AIChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -36,14 +108,20 @@ export default function AIChatWidget() {
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const shouldScrollRef = useRef(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   useEffect(() => {
-    scrollToBottom();
+    // Only auto-scroll when the user sends a message, not when AI responds
+    if (shouldScrollRef.current) {
+      scrollToBottom();
+      shouldScrollRef.current = false;
+    }
   }, [messages]);
 
   useEffect(() => {
@@ -67,6 +145,7 @@ export default function AIChatWidget() {
     setInput("");
     setIsLoading(true);
     setHasError(false);
+    shouldScrollRef.current = true;
 
     try {
       const history = messages.map((m) => ({
@@ -237,11 +316,15 @@ export default function AIChatWidget() {
                       : "bg-muted/70 rounded-tl-md"
                   }`}
                 >
-                  {msg.content.split("\n").map((line, i) => (
-                    <p key={i} className={i > 0 ? "mt-2" : ""}>
-                      {line}
-                    </p>
-                  ))}
+                  {msg.role === "user" ? (
+                    msg.content.split("\n").map((line, i) => (
+                      <p key={i} className={i > 0 ? "mt-1" : ""}>
+                        {line}
+                      </p>
+                    ))
+                  ) : (
+                    <FormattedContent content={msg.content} />
+                  )}
                 </div>
               </div>
             ))}

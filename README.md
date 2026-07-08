@@ -8,6 +8,7 @@ A modern, full-stack Hospital Appointment Booking and Management System built wi
 - **👨‍⚕️ Doctor Dashboard:** Doctors can manage their schedule, view upcoming appointments, write prescriptions, and review patient medical history.
 - **🤕 Patient Dashboard:** Patients can browse doctors by specialization, book appointments, view their upcoming/past visits, and manage their health profiles.
 - **⭐ Ratings & Reviews:** Patients can leave star ratings and reviews for doctors after completing an appointment.
+- **🤖 AI Health Assistant:** A floating chatbot powered by Google Gemini that answers general health questions 24/7.
 - **👨‍💼 Admin Dashboard:** A secure admin portal featuring interactive Recharts for hospital KPIs (revenue, appointments, growth) and full user management capabilities (change roles, deactivate, cascade delete).
 - **📊 Real-Time Database:** Fully integrated with MongoDB Atlas using Mongoose for strict schema validation.
 - **🎨 Premium UI/UX:** Built with shadcn/ui and Tailwind CSS featuring modern aesthetics, glassmorphism, and responsive design.
@@ -43,6 +44,9 @@ NEXTAUTH_SECRET="your-super-secret-random-string"
 # NextAuth URL
 NEXTAUTH_URL="http://localhost:3000"
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
+
+# Gemini AI API Key (Get from https://aistudio.google.com/apikey)
+GEMINI_API_KEY="your-gemini-api-key"
 ```
 
 ### 3. Seed the Database

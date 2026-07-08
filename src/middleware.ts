@@ -30,8 +30,9 @@ export default NextAuth(authConfig).auth((req) => {
   const isApiAuth = pathname.startsWith("/api/auth");
   const isApiRegister = pathname.startsWith("/api/register");
   const isApiDoctorsPublic = pathname.startsWith("/api/doctors") && req.method === "GET";
+  const isApiChat = pathname.startsWith("/api/chat");
 
-  if (isPublicRoute || isApiAuth || isApiRegister || isApiDoctorsPublic) {
+  if (isPublicRoute || isApiAuth || isApiRegister || isApiDoctorsPublic || isApiChat) {
     if (isLoggedIn && (pathname === "/auth/login" || pathname === "/auth/register")) {
       return NextResponse.redirect(new URL(getDashboardForRole(userRole), req.url));
     }
